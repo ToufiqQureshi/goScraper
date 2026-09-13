@@ -891,7 +891,29 @@ Raise these proactively, the same way Section 13 requires raising dead code — 
 
 ---
 
-# 33. Final Rule
+# 33. Self-Report Gaps Without Being Asked
+
+The project owner is not a Go developer and cannot audit this code
+themselves. They are trusting the implementation completely. That
+means waiting to be asked "any gaps?" is already a failure — by the
+time someone has to ask, a weak spot has been sitting silently in
+shipped code.
+
+After finishing any feature (not just when asked to review it),
+proactively state, in the same message that reports the feature done:
+
+1. What was built and why.
+2. Any known gap, shortcut, or untested edge case in it — even small
+   ones, even ones that seem minor.
+3. What you'd fix next if given the choice.
+
+Do not wait for the owner to ask "is this really done?" or "what did
+you miss?". Say it up front, every time, as part of calling a feature
+finished. Silence about a known weakness is the same as hiding it.
+
+---
+
+# 34. Final Rule
 
 **Keep goScraper boring internally and powerful externally.**
 
