@@ -2,6 +2,8 @@ package browserpool
 
 import (
 	"context"
+	"errors"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -13,13 +15,14 @@ import (
 // tests can run anywhere (no browser binary needed).
 func newTestPool(size int) *Pool {
 	pool := &Pool{
-		browsers: make(chan *scraper.Browser, size),
+		browsers: make(chan *pooledBrowser, size),
 		healthy:  func(*scraper.Browser) bool { return true },
 		spawn:    func() (*scraper.Browser, error) { return &scraper.Browser{}, nil },
 	}
 	for i := 0; i < size; i++ {
-		pool.browsers <- &scraper.Browser{}
+		pool.browsers <- &pooledBrowser{browser: &scraper.Browser{}, lastUsed: time.Now()}
 	}
+	pool.created.Store(int64(size))
 	return pool
 }
 
@@ -122,8 +125,12 @@ func TestGetAfterCloseReturnsError(t *testing.T) {
 	pool := newTestPool(1)
 	pool.Close()
 
-	if _, err := pool.Get(context.Background()); err == nil {
+	_, err := pool.Get(context.Background())
+	if err == nil {
 		t.Fatal("Get should return an error once the pool is closed")
+	}
+	if !errors.Is(err, ErrClosed) {
+		t.Fatalf("expected errors.Is(err, ErrClosed) to be true, got: %v", err)
 	}
 }
 
@@ -166,4 +173,105 @@ func TestConcurrentReleaseAndCloseDoNotRace(t *testing.T) {
 	}()
 
 	wg.Wait()
+}
+
+func TestGetRecyclesBrowserIdleTooLong(t *testing.T) {
+	pool := &Pool{
+		browsers: make(chan *pooledBrowser, 1),
+		healthy:  func(*scraper.Browser) bool { return true },
+		spawn:    func() (*scraper.Browser, error) { return &scraper.Browser{}, nil },
+	}
+	stale := &scraper.Browser{}
+	pool.browsers <- &pooledBrowser{browser: stale, lastUsed: time.Now().Add(-recycleAfter - time.Minute)}
+
+	b, err := pool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	defer pool.Close()
+
+	if b == stale {
+		t.Fatal("Get should not hand out a browser that has been idle past recycleAfter")
+	}
+	if pool.Stats().Recycled != 1 {
+		t.Fatalf("expected 1 recycled browser, got %d", pool.Stats().Recycled)
+	}
+}
+
+func TestGetSkipsHealthCheckForRecentlyUsedBrowser(t *testing.T) {
+	pool := &Pool{
+		browsers: make(chan *pooledBrowser, 1),
+		healthy:  func(*scraper.Browser) bool { return false }, // would fail if checked
+		spawn:    func() (*scraper.Browser, error) { return &scraper.Browser{}, nil },
+	}
+
+	recent := &scraper.Browser{}
+	pool.browsers <- &pooledBrowser{browser: recent, lastUsed: time.Now()}
+
+	b, err := pool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	defer pool.Close()
+
+	if b != recent {
+		t.Fatal("Get should skip the health check for a browser used moments ago")
+	}
+}
+
+func TestStatsTracksActivity(t *testing.T) {
+	pool := newTestPool(2)
+	defer pool.Close()
+
+	b, err := pool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	pool.Release(b)
+
+	stats := pool.Stats()
+	if stats.Created != 2 {
+		t.Fatalf("expected Created=2, got %d", stats.Created)
+	}
+	if stats.Gets != 1 {
+		t.Fatalf("expected Gets=1, got %d", stats.Gets)
+	}
+	if stats.Releases != 1 {
+		t.Fatalf("expected Releases=1, got %d", stats.Releases)
+	}
+}
+
+// TestManyGetReleaseCyclesDoNotLeakGoroutines is a fast stand-in for a
+// long-running crawl: it hammers Get/Release and checks the goroutine
+// count doesn't creep up, which is what a stuck goroutine per call
+// would look like over hours of real traffic.
+func TestManyGetReleaseCyclesDoNotLeakGoroutines(t *testing.T) {
+	pool := newTestPool(4)
+	defer pool.Close()
+
+	for i := 0; i < 500; i++ {
+		b, err := pool.Get(context.Background())
+		if err != nil {
+			t.Fatalf("Get returned an error on iteration %d: %v", i, err)
+		}
+		pool.Release(b)
+	}
+
+	runtime.GC()
+	before := runtime.NumGoroutine()
+
+	for i := 0; i < 500; i++ {
+		b, err := pool.Get(context.Background())
+		if err != nil {
+			t.Fatalf("Get returned an error on iteration %d: %v", i, err)
+		}
+		pool.Release(b)
+	}
+
+	runtime.GC()
+	after := runtime.NumGoroutine()
+
+	if after > before+2 { // small slack for the Go runtime/test harness itself
+		t.Fatalf("goroutine count grew from %d to %d after 500 Get/Release cycles", before, after)
+	}
 }
