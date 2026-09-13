@@ -67,10 +67,13 @@ func New(ctx context.Context, opts ...Options) (*Browser, error) {
 		cancel:      cancel,
 	}
 
-	// Force browser startup now so New can report launch errors,
-	// bounded by the caller's ctx instead of blocking forever if
-	// Chrome never comes up.
-	if err := b.run(ctx); err != nil {
+	// Start Chrome now so New can report launch errors. This first Run
+	// must be handed the browser's own context: chromedp ties the
+	// Chrome process to whatever context starts it, so running it on a
+	// cancellable child would kill the browser the moment New returned.
+	// The caller's ctx therefore bounds the launch from outside, tearing
+	// the browser down if it never comes up.
+	if err := waitForRun(ctx, func() error { return chromedp.Run(b.ctx) }); err != nil {
 		b.Close()
 		return nil, err
 	}
@@ -78,8 +81,29 @@ func New(ctx context.Context, opts ...Options) (*Browser, error) {
 	return b, nil
 }
 
+// waitForRun runs fn, giving up as soon as ctx is done. It exists for
+// the two calls that establish a lifetime - launching the browser and
+// opening a tab - where the work cannot simply be handed a cancellable
+// context without destroying the thing it just created. fn keeps
+// running in the background after a timeout; its caller tears down the
+// half-built browser or tab, which is what stops it.
+func waitForRun(ctx context.Context, fn func() error) error {
+	done := make(chan error, 1)
+	go func() { done <- fn() }()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // run executes actions against the browser's own long-lived context,
 // bounded by ctx so a hung command can't block its caller forever.
+// Safe to cancel: by the time anything calls this, New has already
+// created the browser and its first target, so cancelling only aborts
+// the command in flight.
 func (b *Browser) run(ctx context.Context, actions ...chromedp.Action) error {
 	if b.ctx == nil {
 		return errors.New("browser is not open")
@@ -95,13 +119,23 @@ func (b *Browser) run(ctx context.Context, actions ...chromedp.Action) error {
 }
 
 // Open creates a new browser tab and navigates it to url, bounded by
-// ctx. The tab itself stays open after ctx ends; only this initial
-// navigation is cancelled if ctx runs out first.
+// ctx. The tab stays open after ctx ends; only this first navigation
+// is given up on if ctx runs out first, and then the tab is closed.
 func (b *Browser) Open(ctx context.Context, url string) (*Page, error) {
-	pageCtx, cancel := chromedp.NewContext(b.ctx)
+	if b.ctx == nil {
+		return nil, errors.New("browser is not open")
+	}
 
+	pageCtx, cancel := chromedp.NewContext(b.ctx)
 	page := &Page{ctx: pageCtx, cancel: cancel}
-	if err := page.run(ctx, chromedp.Navigate(url)); err != nil {
+
+	// Like the launch in New, this first Run creates the tab and ties
+	// it to the context it is given, so it gets the page's own context
+	// rather than a cancellable child - otherwise the tab would close
+	// as soon as this navigation finished.
+	if err := waitForRun(ctx, func() error {
+		return chromedp.Run(pageCtx, chromedp.Navigate(url))
+	}); err != nil {
 		cancel()
 		return nil, err
 	}
