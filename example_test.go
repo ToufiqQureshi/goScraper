@@ -1,6 +1,7 @@
 package scraper_test
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -8,19 +9,21 @@ import (
 )
 
 func Example() {
-	browser, err := scraper.New()
+	ctx := context.Background()
+
+	browser, err := scraper.New(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer browser.Close()
 
-	page, err := browser.Open("https://example.com")
+	page, err := browser.Open(ctx, "https://example.com")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer page.Close()
 
-	text, err := page.Text("h1")
+	text, err := page.Text(ctx, "h1")
 	if err != nil {
 		log.Fatal(err)
 	}

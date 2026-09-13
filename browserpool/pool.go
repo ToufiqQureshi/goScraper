@@ -5,6 +5,7 @@ package browserpool
 
 import (
 	"context"
+	"time"
 
 	pool "github.com/ToufiqQureshi/Scraper/internal/pool"
 
@@ -15,6 +16,17 @@ import (
 // dashboards and alerts.
 type Stats pool.Stats
 
+// Options tunes recycling behavior. A zero Options uses sensible
+// defaults (10 minutes / 2 seconds).
+type Options struct {
+	// RecycleAfter bounds how long a browser can sit idle in the pool
+	// before Get replaces it, even if it still looks healthy.
+	RecycleAfter time.Duration
+	// SkipHealthCheckWithin avoids a health check for a browser used
+	// this recently.
+	SkipHealthCheckWithin time.Duration
+}
+
 // Pool hands out browsers and takes them back when you're done.
 // It reuses a fixed number of browsers and replaces any that crash
 // or go stale.
@@ -23,11 +35,19 @@ type Pool struct {
 }
 
 // New starts `size` browsers, in parallel, and returns a pool holding
-// them.
-func New(size int) (*Pool, error) {
+// them. ctx bounds only this initial launch. opts is optional; pass
+// nothing for the defaults.
+func New(ctx context.Context, size int, opts ...Options) (*Pool, error) {
+	var o Options
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+
 	core, err := pool.New(
+		ctx,
 		size,
-		(*scraper.Browser).Healthy,
+		pool.Options(o),
+		func(ctx context.Context, b *scraper.Browser) bool { return b.Healthy(ctx) },
 		scraper.New,
 		func(b *scraper.Browser) { b.Close() },
 	)

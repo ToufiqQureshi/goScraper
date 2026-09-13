@@ -22,9 +22,11 @@ func newTestPool(t *testing.T, size int) *Pool[*item] {
 
 	var next atomic.Int64
 	p, err := New(
+		context.Background(),
 		size,
-		func(*item) bool { return true },
-		func() (*item, error) {
+		Options{},
+		func(context.Context, *item) bool { return true },
+		func(context.Context) (*item, error) {
 			return &item{id: int(next.Add(1))}, nil
 		},
 		func(i *item) { i.closed = true },
@@ -36,14 +38,14 @@ func newTestPool(t *testing.T, size int) *Pool[*item] {
 }
 
 func TestNewRejectsInvalidSize(t *testing.T) {
-	spawn := func() (*item, error) { return &item{}, nil }
-	healthy := func(*item) bool { return true }
+	spawn := func(context.Context) (*item, error) { return &item{}, nil }
+	healthy := func(context.Context, *item) bool { return true }
 	discard := func(*item) {}
 
-	if _, err := New(0, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
+	if _, err := New(context.Background(), 0, Options{}, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
 		t.Fatalf("New(0) should return ErrInvalidSize, got: %v", err)
 	}
-	if _, err := New(-1, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
+	if _, err := New(context.Background(), -1, Options{}, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
 		t.Fatalf("New(-1) should return ErrInvalidSize, got: %v", err)
 	}
 }
@@ -52,9 +54,9 @@ func TestNewReturnsSpawnErrorAndCleansUp(t *testing.T) {
 	var created, discarded atomic.Int64
 	spawnErr := errors.New("boom")
 
-	_, err := New(3,
-		func(*item) bool { return true },
-		func() (*item, error) {
+	_, err := New(context.Background(), 3, Options{},
+		func(context.Context, *item) bool { return true },
+		func(context.Context) (*item, error) {
 			n := created.Add(1)
 			if n == 2 {
 				return nil, spawnErr
@@ -220,12 +222,14 @@ func TestGetRecyclesUnhealthyItem(t *testing.T) {
 	spawned := &item{id: 2}
 
 	p := &Pool[*item]{
-		items:   make(chan *entry[*item], 1),
-		healthy: func(*item) bool { return false },
-		spawn:   func() (*item, error) { return spawned, nil },
-		discard: func(i *item) { i.closed = true },
+		items:                 make(chan *entry[*item], 1),
+		recycleAfter:          DefaultRecycleAfter,
+		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		healthy:               func(context.Context, *item) bool { return false },
+		spawn:                 func(context.Context) (*item, error) { return spawned, nil },
+		discard:               func(i *item) { i.closed = true },
 	}
-	p.items <- &entry[*item]{value: stale, lastUsed: time.Now().Add(-SkipHealthCheckWithin - time.Second)}
+	p.items <- &entry[*item]{value: stale, lastUsed: time.Now().Add(-DefaultSkipHealthCheckWithin - time.Second)}
 
 	v, err := p.Get(context.Background())
 	if err != nil {
@@ -249,12 +253,14 @@ func TestGetRecyclesItemIdleTooLong(t *testing.T) {
 	spawned := &item{id: 2}
 
 	p := &Pool[*item]{
-		items:   make(chan *entry[*item], 1),
-		healthy: func(*item) bool { return true }, // healthy, but too old
-		spawn:   func() (*item, error) { return spawned, nil },
-		discard: func(i *item) { i.closed = true },
+		items:                 make(chan *entry[*item], 1),
+		recycleAfter:          DefaultRecycleAfter,
+		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		healthy:               func(context.Context, *item) bool { return true }, // healthy, but too old
+		spawn:                 func(context.Context) (*item, error) { return spawned, nil },
+		discard:               func(i *item) { i.closed = true },
 	}
-	p.items <- &entry[*item]{value: stale, lastUsed: time.Now().Add(-RecycleAfter - time.Minute)}
+	p.items <- &entry[*item]{value: stale, lastUsed: time.Now().Add(-DefaultRecycleAfter - time.Minute)}
 
 	v, err := p.Get(context.Background())
 	if err != nil {
@@ -271,10 +277,12 @@ func TestGetSkipsHealthCheckForRecentlyUsedItem(t *testing.T) {
 	recent := &item{id: 1}
 
 	p := &Pool[*item]{
-		items:   make(chan *entry[*item], 1),
-		healthy: func(*item) bool { return false }, // would fail if checked
-		spawn:   func() (*item, error) { return &item{id: 2}, nil },
-		discard: func(i *item) { i.closed = true },
+		items:                 make(chan *entry[*item], 1),
+		recycleAfter:          DefaultRecycleAfter,
+		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		healthy:               func(context.Context, *item) bool { return false }, // would fail if checked
+		spawn:                 func(context.Context) (*item, error) { return &item{id: 2}, nil },
+		discard:               func(i *item) { i.closed = true },
 	}
 	p.items <- &entry[*item]{value: recent, lastUsed: time.Now()}
 
@@ -286,6 +294,37 @@ func TestGetSkipsHealthCheckForRecentlyUsedItem(t *testing.T) {
 
 	if v != recent {
 		t.Fatal("Get should skip the health check for an item used moments ago")
+	}
+}
+
+func TestGetRecycleRespectsContextCancellation(t *testing.T) {
+	stale := &item{id: 1}
+
+	unblock := make(chan struct{})
+	p := &Pool[*item]{
+		items:                 make(chan *entry[*item], 1),
+		recycleAfter:          DefaultRecycleAfter,
+		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		healthy:               func(context.Context, *item) bool { return false },
+		spawn: func(ctx context.Context) (*item, error) {
+			select {
+			case <-unblock:
+				return &item{id: 2}, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		},
+		discard: func(i *item) { i.closed = true },
+	}
+	p.items <- &entry[*item]{value: stale, lastUsed: time.Now().Add(-DefaultSkipHealthCheckWithin - time.Second)}
+	defer close(unblock)
+	defer p.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	if _, err := p.Get(ctx); err == nil {
+		t.Fatal("Get should propagate a spawn error caused by context cancellation")
 	}
 }
 

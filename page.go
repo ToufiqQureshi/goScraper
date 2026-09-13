@@ -14,17 +14,31 @@ type Page struct {
 	cancel context.CancelFunc
 }
 
+// run executes actions against the tab's own long-lived context,
+// bounded by ctx so a hung command (e.g. a page that never finishes
+// loading) can't block its caller forever.
+func (p *Page) run(ctx context.Context, actions ...chromedp.Action) error {
+	if p.ctx == nil {
+		return errors.New("page is not open")
+	}
+
+	runCtx, cancel := context.WithCancel(p.ctx)
+	defer cancel()
+
+	stop := context.AfterFunc(ctx, cancel)
+	defer stop()
+
+	return chromedp.Run(runCtx, actions...)
+}
+
 // Text returns the visible text of the first element matching selector.
-func (p *Page) Text(selector string) (string, error) {
+func (p *Page) Text(ctx context.Context, selector string) (string, error) {
 	if selector == "" {
 		return "", errors.New("selector cannot be empty")
 	}
 
 	var text string
-	err := chromedp.Run(
-		p.ctx,
-		chromedp.Text(selector, &text, chromedp.ByQuery),
-	)
+	err := p.run(ctx, chromedp.Text(selector, &text, chromedp.ByQuery))
 	if err != nil {
 		return "", err
 	}
@@ -33,7 +47,7 @@ func (p *Page) Text(selector string) (string, error) {
 }
 
 // TextAll returns the visible text of every element matching selector.
-func (p *Page) TextAll(selector string) ([]string, error) {
+func (p *Page) TextAll(ctx context.Context, selector string) ([]string, error) {
 	if selector == "" {
 		return nil, errors.New("selector cannot be empty")
 	}
@@ -44,10 +58,7 @@ func (p *Page) TextAll(selector string) ([]string, error) {
 		selector,
 	)
 
-	if err := chromedp.Run(
-		p.ctx,
-		chromedp.EvaluateAsDevTools(expression, &texts),
-	); err != nil {
+	if err := p.run(ctx, chromedp.EvaluateAsDevTools(expression, &texts)); err != nil {
 		return nil, err
 	}
 
@@ -55,9 +66,9 @@ func (p *Page) TextAll(selector string) ([]string, error) {
 }
 
 // Title returns the current page title.
-func (p *Page) Title() (string, error) {
+func (p *Page) Title(ctx context.Context) (string, error) {
 	var title string
-	if err := chromedp.Run(p.ctx, chromedp.Title(&title)); err != nil {
+	if err := p.run(ctx, chromedp.Title(&title)); err != nil {
 		return "", err
 	}
 
@@ -65,16 +76,13 @@ func (p *Page) Title() (string, error) {
 }
 
 // HTML returns the outer HTML of the first element matching selector.
-func (p *Page) HTML(selector string) (string, error) {
+func (p *Page) HTML(ctx context.Context, selector string) (string, error) {
 	if selector == "" {
 		return "", errors.New("selector cannot be empty")
 	}
 
 	var html string
-	if err := chromedp.Run(
-		p.ctx,
-		chromedp.OuterHTML(selector, &html, chromedp.ByQuery),
-	); err != nil {
+	if err := p.run(ctx, chromedp.OuterHTML(selector, &html, chromedp.ByQuery)); err != nil {
 		return "", err
 	}
 
@@ -82,7 +90,7 @@ func (p *Page) HTML(selector string) (string, error) {
 }
 
 // Attr returns the named attribute value and whether it was found.
-func (p *Page) Attr(selector string, attribute string) (string, bool, error) {
+func (p *Page) Attr(ctx context.Context, selector string, attribute string) (string, bool, error) {
 	if selector == "" {
 		return "", false, errors.New("selector cannot be empty")
 	}
@@ -92,10 +100,7 @@ func (p *Page) Attr(selector string, attribute string) (string, bool, error) {
 
 	var value string
 	var ok bool
-	if err := chromedp.Run(
-		p.ctx,
-		chromedp.AttributeValue(selector, attribute, &value, &ok, chromedp.ByQuery),
-	); err != nil {
+	if err := p.run(ctx, chromedp.AttributeValue(selector, attribute, &value, &ok, chromedp.ByQuery)); err != nil {
 		return "", false, err
 	}
 
@@ -103,34 +108,34 @@ func (p *Page) Attr(selector string, attribute string) (string, bool, error) {
 }
 
 // Click triggers a mouse click on the first element matching selector.
-func (p *Page) Click(selector string) error {
+func (p *Page) Click(ctx context.Context, selector string) error {
 	if selector == "" {
 		return errors.New("selector cannot be empty")
 	}
 
-	return chromedp.Run(p.ctx, chromedp.Click(selector, chromedp.ByQuery))
+	return p.run(ctx, chromedp.Click(selector, chromedp.ByQuery))
 }
 
 // Type sends keyboard input to the first element matching selector.
-func (p *Page) Type(selector string, value string) error {
+func (p *Page) Type(ctx context.Context, selector string, value string) error {
 	if selector == "" {
 		return errors.New("selector cannot be empty")
 	}
 
-	return chromedp.Run(p.ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery))
+	return p.run(ctx, chromedp.SendKeys(selector, value, chromedp.ByQuery))
 }
 
 // Wait waits until the first element matching selector is visible.
-func (p *Page) Wait(selector string) error {
+func (p *Page) Wait(ctx context.Context, selector string) error {
 	if selector == "" {
 		return errors.New("selector cannot be empty")
 	}
 
-	return chromedp.Run(p.ctx, chromedp.WaitVisible(selector, chromedp.ByQuery))
+	return p.run(ctx, chromedp.WaitVisible(selector, chromedp.ByQuery))
 }
 
 // Eval runs a JavaScript expression in the page context and stores the result.
-func (p *Page) Eval(expression string, result any) error {
+func (p *Page) Eval(ctx context.Context, expression string, result any) error {
 	if expression == "" {
 		return errors.New("expression cannot be empty")
 	}
@@ -138,33 +143,31 @@ func (p *Page) Eval(expression string, result any) error {
 		return errors.New("result cannot be nil")
 	}
 
-	return chromedp.Run(p.ctx, chromedp.Evaluate(expression, result))
+	return p.run(ctx, chromedp.Evaluate(expression, result))
 }
 
 // Navigate loads a new URL in this same tab. This is what makes page
 // reuse possible: a pool can hand the same tab out again and again by
 // calling Navigate instead of opening a new one each time.
-func (p *Page) Navigate(url string) error {
+func (p *Page) Navigate(ctx context.Context, url string) error {
 	if url == "" {
 		return errors.New("url cannot be empty")
 	}
-	if p.ctx == nil {
-		return errors.New("page is not open")
-	}
 
-	return chromedp.Run(p.ctx, chromedp.Navigate(url))
+	return p.run(ctx, chromedp.Navigate(url))
 }
 
-// Healthy reports whether the tab can still respond to commands. A
-// crashed browser or a killed tab fails this check, so callers (like
-// a pool) know to discard it instead of handing out a dead page.
-func (p *Page) Healthy() bool {
+// Healthy reports whether the tab can still respond to commands,
+// bounded by ctx. A crashed browser or a killed tab fails this check,
+// so callers (like a pool) know to discard it instead of handing out
+// a dead page.
+func (p *Page) Healthy(ctx context.Context) bool {
 	if p.ctx == nil || p.ctx.Err() != nil {
 		return false
 	}
 
 	var result int
-	return chromedp.Run(p.ctx, chromedp.Evaluate("1", &result)) == nil
+	return p.run(ctx, chromedp.Evaluate("1", &result)) == nil
 }
 
 // Close closes this browser tab.

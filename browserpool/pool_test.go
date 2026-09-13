@@ -19,9 +19,11 @@ func newTestPool(t *testing.T, size int) *Pool {
 	t.Helper()
 
 	core, err := pool.New(
+		context.Background(),
 		size,
-		func(*scraper.Browser) bool { return true },
-		func() (*scraper.Browser, error) { return &scraper.Browser{}, nil },
+		pool.Options{},
+		func(context.Context, *scraper.Browser) bool { return true },
+		func(context.Context) (*scraper.Browser, error) { return &scraper.Browser{}, nil },
 		func(*scraper.Browser) {},
 	)
 	if err != nil {
@@ -31,10 +33,10 @@ func newTestPool(t *testing.T, size int) *Pool {
 }
 
 func TestNewRejectsInvalidSize(t *testing.T) {
-	if _, err := New(0); !errors.Is(err, ErrInvalidSize) {
+	if _, err := New(context.Background(), 0); !errors.Is(err, ErrInvalidSize) {
 		t.Fatalf("New(0) should return ErrInvalidSize, got: %v", err)
 	}
-	if _, err := New(-1); !errors.Is(err, ErrInvalidSize) {
+	if _, err := New(context.Background(), -1); !errors.Is(err, ErrInvalidSize) {
 		t.Fatalf("New(-1) should return ErrInvalidSize, got: %v", err)
 	}
 }

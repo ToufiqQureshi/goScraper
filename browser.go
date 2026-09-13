@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"context"
+	"errors"
 
 	"github.com/chromedp/chromedp"
 )
@@ -16,25 +17,28 @@ type Browser struct {
 
 // New launches a headless Chromium browser. Headless is the correct
 // default for production: servers have no display to show a real
-// window on.
-func New() (*Browser, error) {
+// window on. ctx bounds only the launch itself; cancelling it after
+// New returns has no effect (use Close for that).
+func New(ctx context.Context) (*Browser, error) {
 	allocCtx, allocCancel := chromedp.NewExecAllocator(
 		context.Background(),
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
 	)
 
-	ctx, cancel := chromedp.NewContext(allocCtx)
+	browserCtx, cancel := chromedp.NewContext(allocCtx)
 
 	b := &Browser{
 		allocCtx:    allocCtx,
 		allocCancel: allocCancel,
-		ctx:         ctx,
+		ctx:         browserCtx,
 		cancel:      cancel,
 	}
 
-	// Force browser startup now so New() can report launch errors.
-	if err := chromedp.Run(ctx); err != nil {
+	// Force browser startup now so New can report launch errors,
+	// bounded by the caller's ctx instead of blocking forever if
+	// Chrome never comes up.
+	if err := b.run(ctx); err != nil {
 		b.Close()
 		return nil, err
 	}
@@ -42,31 +46,48 @@ func New() (*Browser, error) {
 	return b, nil
 }
 
-// Open creates a new browser page and navigates to url.
-func (b *Browser) Open(url string) (*Page, error) {
-	ctx, cancel := chromedp.NewContext(b.ctx)
+// run executes actions against the browser's own long-lived context,
+// bounded by ctx so a hung command can't block its caller forever.
+func (b *Browser) run(ctx context.Context, actions ...chromedp.Action) error {
+	if b.ctx == nil {
+		return errors.New("browser is not open")
+	}
 
-	if err := chromedp.Run(ctx, chromedp.Navigate(url)); err != nil {
+	runCtx, cancel := context.WithCancel(b.ctx)
+	defer cancel()
+
+	stop := context.AfterFunc(ctx, cancel)
+	defer stop()
+
+	return chromedp.Run(runCtx, actions...)
+}
+
+// Open creates a new browser tab and navigates it to url, bounded by
+// ctx. The tab itself stays open after ctx ends; only this initial
+// navigation is cancelled if ctx runs out first.
+func (b *Browser) Open(ctx context.Context, url string) (*Page, error) {
+	pageCtx, cancel := chromedp.NewContext(b.ctx)
+
+	page := &Page{ctx: pageCtx, cancel: cancel}
+	if err := page.run(ctx, chromedp.Navigate(url)); err != nil {
 		cancel()
 		return nil, err
 	}
 
-	return &Page{
-		ctx:    ctx,
-		cancel: cancel,
-	}, nil
+	return page, nil
 }
 
-// Healthy reports whether the browser can still respond to commands.
-// A crashed or killed Chrome process fails this check, so callers
-// (like a pool) know to discard it instead of handing out a dead browser.
-func (b *Browser) Healthy() bool {
+// Healthy reports whether the browser can still respond to commands,
+// bounded by ctx. A crashed or killed Chrome process fails this
+// check, so callers (like a pool) know to discard it instead of
+// handing out a dead browser.
+func (b *Browser) Healthy(ctx context.Context) bool {
 	if b.ctx == nil || b.ctx.Err() != nil {
 		return false
 	}
 
 	var result int
-	return chromedp.Run(b.ctx, chromedp.Evaluate("1", &result)) == nil
+	return b.run(ctx, chromedp.Evaluate("1", &result)) == nil
 }
 
 // Close shuts down Chromium and releases all resources.

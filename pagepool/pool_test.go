@@ -20,9 +20,11 @@ func newTestPool(t *testing.T, size int) *Pool {
 	t.Helper()
 
 	core, err := pool.New(
+		context.Background(),
 		size,
-		func(*scraper.Page) bool { return true },
-		func() (*scraper.Page, error) { return &scraper.Page{}, nil },
+		pool.Options{},
+		func(context.Context, *scraper.Page) bool { return true },
+		func(context.Context) (*scraper.Page, error) { return &scraper.Page{}, nil },
 		func(*scraper.Page) {},
 	)
 	if err != nil {
@@ -31,14 +33,14 @@ func newTestPool(t *testing.T, size int) *Pool {
 
 	return &Pool{
 		core:     core,
-		open:     func(string) (*scraper.Page, error) { return &scraper.Page{}, nil },
-		navigate: func(*scraper.Page, string) error { return nil },
+		open:     func(context.Context, string) (*scraper.Page, error) { return &scraper.Page{}, nil },
+		navigate: func(context.Context, *scraper.Page, string) error { return nil },
 	}
 }
 
 func TestNewRejectsNilBrowser(t *testing.T) {
-	if _, err := New(nil, 1); err == nil {
-		t.Fatal("New(nil, 1) should return an error")
+	if _, err := New(context.Background(), nil, 1); err == nil {
+		t.Fatal("New(ctx, nil, 1) should return an error")
 	}
 }
 
@@ -60,7 +62,7 @@ func TestGetNavigatesTheReusedPage(t *testing.T) {
 	defer p.Close()
 
 	var gotURL string
-	p.navigate = func(_ *scraper.Page, url string) error {
+	p.navigate = func(_ context.Context, _ *scraper.Page, url string) error {
 		gotURL = url
 		return nil
 	}
@@ -79,11 +81,11 @@ func TestGetReplacesPageWhenNavigateFails(t *testing.T) {
 	defer p.Close()
 
 	navigateErr := errors.New("tab crashed mid-navigation")
-	p.navigate = func(*scraper.Page, string) error { return navigateErr }
+	p.navigate = func(context.Context, *scraper.Page, string) error { return navigateErr }
 
 	opened := &scraper.Page{}
 	var openedURL string
-	p.open = func(url string) (*scraper.Page, error) {
+	p.open = func(_ context.Context, url string) (*scraper.Page, error) {
 		openedURL = url
 		return opened, nil
 	}
@@ -104,9 +106,9 @@ func TestGetPropagatesFallbackOpenError(t *testing.T) {
 	p := newTestPool(t, 1)
 	defer p.Close()
 
-	p.navigate = func(*scraper.Page, string) error { return errors.New("crashed") }
+	p.navigate = func(context.Context, *scraper.Page, string) error { return errors.New("crashed") }
 	openErr := errors.New("chrome is gone")
-	p.open = func(string) (*scraper.Page, error) { return nil, openErr }
+	p.open = func(context.Context, string) (*scraper.Page, error) { return nil, openErr }
 
 	if _, err := p.Get(context.Background(), "https://example.com"); !errors.Is(err, openErr) {
 		t.Fatalf("expected the fallback open error to propagate, got: %v", err)

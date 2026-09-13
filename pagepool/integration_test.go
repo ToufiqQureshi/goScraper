@@ -13,7 +13,7 @@ import (
 func requireChrome(t *testing.T) *scraper.Browser {
 	t.Helper()
 
-	b, err := scraper.New()
+	b, err := scraper.New(context.Background())
 	if err != nil {
 		t.Skipf("skipping: no Chrome available to launch: %v", err)
 	}
@@ -24,17 +24,18 @@ func TestPoolReusesTheSameTabAcrossPages(t *testing.T) {
 	browser := requireChrome(t)
 	defer browser.Close()
 
-	pool, err := New(browser, 1)
+	ctx := context.Background()
+	pool, err := New(ctx, browser, 1)
 	if err != nil {
 		t.Fatalf("New returned an error: %v", err)
 	}
 	defer pool.Close()
 
-	first, err := pool.Get(context.Background(), "https://example.com")
+	first, err := pool.Get(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("Get returned an error: %v", err)
 	}
-	title, err := first.Title()
+	title, err := first.Title(ctx)
 	if err != nil {
 		t.Fatalf("Title returned an error: %v", err)
 	}
@@ -43,7 +44,7 @@ func TestPoolReusesTheSameTabAcrossPages(t *testing.T) {
 	}
 	pool.Release(first)
 
-	second, err := pool.Get(context.Background(), "https://example.com")
+	second, err := pool.Get(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("Get returned an error: %v", err)
 	}
@@ -58,13 +59,14 @@ func TestPoolReplacesACrashedPage(t *testing.T) {
 	browser := requireChrome(t)
 	defer browser.Close()
 
-	pool, err := New(browser, 1)
+	ctx := context.Background()
+	pool, err := New(ctx, browser, 1)
 	if err != nil {
 		t.Fatalf("New returned an error: %v", err)
 	}
 	defer pool.Close()
 
-	page, err := pool.Get(context.Background(), "https://example.com")
+	page, err := pool.Get(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("Get returned an error: %v", err)
 	}
@@ -74,7 +76,7 @@ func TestPoolReplacesACrashedPage(t *testing.T) {
 	page.Close()
 	pool.Release(page)
 
-	replacement, err := pool.Get(context.Background(), "https://example.com")
+	replacement, err := pool.Get(ctx, "https://example.com")
 	if err != nil {
 		t.Fatalf("Get returned an error: %v", err)
 	}
@@ -83,7 +85,7 @@ func TestPoolReplacesACrashedPage(t *testing.T) {
 	if replacement == page {
 		t.Fatal("Get should not hand out a crashed page")
 	}
-	if !replacement.Healthy() {
+	if !replacement.Healthy(ctx) {
 		t.Fatal("Get should replace a crashed page with a healthy one")
 	}
 }

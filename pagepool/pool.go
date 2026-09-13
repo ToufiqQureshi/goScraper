@@ -6,6 +6,7 @@ package pagepool
 import (
 	"context"
 	"errors"
+	"time"
 
 	pool "github.com/ToufiqQureshi/Scraper/internal/pool"
 
@@ -21,6 +22,17 @@ const blank = "about:blank"
 // dashboards and alerts.
 type Stats pool.Stats
 
+// Options tunes recycling behavior. A zero Options uses sensible
+// defaults (10 minutes / 2 seconds).
+type Options struct {
+	// RecycleAfter bounds how long a page can sit idle in the pool
+	// before Get replaces it, even if it still looks healthy.
+	RecycleAfter time.Duration
+	// SkipHealthCheckWithin avoids a health check for a page used
+	// this recently.
+	SkipHealthCheckWithin time.Duration
+}
+
 // Pool hands out pages (browser tabs) and takes them back when you're
 // done. It reuses a fixed number of tabs on one browser and replaces
 // any that crash or go stale.
@@ -30,29 +42,38 @@ type Pool struct {
 	// open and navigate exist so tests can fake tab creation and
 	// navigation without a real browser. Production code always uses
 	// browser.Open and (*scraper.Page).Navigate.
-	open     func(string) (*scraper.Page, error)
-	navigate func(*scraper.Page, string) error
+	open     func(context.Context, string) (*scraper.Page, error)
+	navigate func(context.Context, *scraper.Page, string) error
 }
 
 // New opens `size` tabs on browser, in parallel, and returns a pool
-// holding them.
-func New(browser *scraper.Browser, size int) (*Pool, error) {
+// holding them. ctx bounds only this initial launch. opts is
+// optional; pass nothing for the defaults.
+func New(ctx context.Context, browser *scraper.Browser, size int, opts ...Options) (*Pool, error) {
 	if browser == nil {
 		return nil, &Error{Op: "new", Err: errors.New("browser cannot be nil")}
 	}
 
+	var o Options
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+
 	open := browser.Open
 	core, err := pool.New(
+		ctx,
 		size,
-		(*scraper.Page).Healthy,
-		func() (*scraper.Page, error) { return open(blank) },
+		pool.Options(o),
+		func(ctx context.Context, p *scraper.Page) bool { return p.Healthy(ctx) },
+		func(ctx context.Context) (*scraper.Page, error) { return open(ctx, blank) },
 		func(p *scraper.Page) { p.Close() },
 	)
 	if err != nil {
 		return nil, &Error{Op: "new", Err: err}
 	}
 
-	return &Pool{core: core, open: open, navigate: (*scraper.Page).Navigate}, nil
+	navigate := func(ctx context.Context, p *scraper.Page, url string) error { return p.Navigate(ctx, url) }
+	return &Pool{core: core, open: open, navigate: navigate}, nil
 }
 
 // Get takes a free page out of the pool and navigates it to url,
@@ -65,14 +86,14 @@ func (p *Pool) Get(ctx context.Context, url string) (*scraper.Page, error) {
 		return nil, &Error{Op: "get", Err: err}
 	}
 
-	if err := p.navigate(page, url); err != nil {
+	if err := p.navigate(ctx, page, url); err != nil {
 		// The tab passed its last health check but failed to navigate
 		// anyway (e.g. it crashed in between). Replace it once instead
 		// of leaking this slot out of the pool or handing back a
 		// broken page. This bypasses the pool's own Stats counters,
 		// since it's a fallback outside the normal reuse path.
 		page.Close()
-		fresh, openErr := p.open(url)
+		fresh, openErr := p.open(ctx, url)
 		if openErr != nil {
 			return nil, &Error{Op: "get", Err: openErr}
 		}

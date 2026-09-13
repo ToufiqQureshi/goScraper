@@ -33,6 +33,22 @@ not what this project is for.
       core reuse/crash-recovery logic with `browserpool` via a small
       internal generic pool (`internal/pool`), so that hard
       concurrency code is correct in one place instead of two.
+- [x] **Context on every blocking call** — `Page`/`Browser` methods
+      (Text, Click, Navigate, Eval, ...) all take a `context.Context`
+      and are aborted the moment it's done, instead of being able to
+      hang forever on a stuck page.
+- [x] **Configurable recycling** — `browserpool.Options` /
+      `pagepool.Options` let a caller tune idle-recycle time and the
+      health-check skip window for their own workload, instead of
+      fixed internal constants.
+- [x] **Unified simple API (`goscraper`)** — wires `browserpool` +
+      `pagepool` together behind one `Get(ctx, url, func(page))` call,
+      matching the "few lines of code" goal. **Known gap:** it does
+      not yet replace a browser whose whole Chrome *process* has died
+      (only a crashed *tab*, the common case, recovers automatically).
+      A dead process leaves its one pool slot returning errors until
+      restarted. Fixing this needs the (browser, pagepool) pair to be
+      rebuildable as a unit — worth doing before this ships as 1.0.
 
 ---
 

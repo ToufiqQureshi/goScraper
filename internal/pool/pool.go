@@ -19,14 +19,31 @@ var ErrClosed = errors.New("pool is closed")
 // ErrInvalidSize is returned by New when size is not positive.
 var ErrInvalidSize = errors.New("pool size must be greater than 0")
 
-// RecycleAfter bounds how long an item can sit idle in the pool
-// before Get replaces it, even if it still looks healthy.
-const RecycleAfter = 10 * time.Minute
+// DefaultRecycleAfter bounds how long an item can sit idle in the
+// pool before Get replaces it, even if it still looks healthy.
+const DefaultRecycleAfter = 10 * time.Minute
 
-// SkipHealthCheckWithin avoids paying for a health check on an item
-// that was handed back this recently; a real failure still surfaces
-// immediately through the caller's own use of the item.
-const SkipHealthCheckWithin = 2 * time.Second
+// DefaultSkipHealthCheckWithin avoids paying for a health check on an
+// item that was handed back this recently; a real failure still
+// surfaces immediately through the caller's own use of the item.
+const DefaultSkipHealthCheckWithin = 2 * time.Second
+
+// Options tunes recycling behavior. A zero Options uses the defaults
+// above; either field can be set independently.
+type Options struct {
+	RecycleAfter          time.Duration
+	SkipHealthCheckWithin time.Duration
+}
+
+func (o Options) withDefaults() Options {
+	if o.RecycleAfter <= 0 {
+		o.RecycleAfter = DefaultRecycleAfter
+	}
+	if o.SkipHealthCheckWithin <= 0 {
+		o.SkipHealthCheckWithin = DefaultSkipHealthCheckWithin
+	}
+	return o
+}
 
 // Stats is a snapshot of pool activity.
 type Stats struct {
@@ -53,24 +70,35 @@ type Pool[T any] struct {
 	gets     atomic.Int64
 	releases atomic.Int64
 
-	healthy func(T) bool
-	spawn   func() (T, error)
+	recycleAfter          time.Duration
+	skipHealthCheckWithin time.Duration
+
+	// healthy and spawn take the caller's context so a Get(ctx) that
+	// ends up recycling an item still respects ctx's deadline instead
+	// of blocking on a health check or a fresh launch indefinitely.
+	healthy func(context.Context, T) bool
+	spawn   func(context.Context) (T, error)
 	discard func(T)
 }
 
 // New creates a pool of `size` items, launching them in parallel with
 // spawn. healthy checks whether an item is still usable, and discard
-// releases an item's own resources (e.g. closing a browser).
-func New[T any](size int, healthy func(T) bool, spawn func() (T, error), discard func(T)) (*Pool[T], error) {
+// releases an item's own resources (e.g. closing a browser). ctx
+// bounds the initial launch only. opts tunes recycling; its zero
+// value uses sensible defaults.
+func New[T any](ctx context.Context, size int, opts Options, healthy func(context.Context, T) bool, spawn func(context.Context) (T, error), discard func(T)) (*Pool[T], error) {
 	if size <= 0 {
 		return nil, ErrInvalidSize
 	}
+	opts = opts.withDefaults()
 
 	p := &Pool[T]{
-		items:   make(chan *entry[T], size),
-		healthy: healthy,
-		spawn:   spawn,
-		discard: discard,
+		items:                 make(chan *entry[T], size),
+		recycleAfter:          opts.RecycleAfter,
+		skipHealthCheckWithin: opts.SkipHealthCheckWithin,
+		healthy:               healthy,
+		spawn:                 spawn,
+		discard:               discard,
 	}
 
 	type launch struct {
@@ -84,7 +112,7 @@ func New[T any](size int, healthy func(T) bool, spawn func() (T, error), discard
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			v, err := spawn()
+			v, err := spawn(ctx)
 			launches <- launch{value: v, err: err}
 		}()
 	}
@@ -124,10 +152,10 @@ func (p *Pool[T]) Get(ctx context.Context) (T, error) {
 		}
 
 		idle := time.Since(e.lastUsed)
-		if idle > RecycleAfter || (idle > SkipHealthCheckWithin && !p.healthy(e.value)) {
+		if idle > p.recycleAfter || (idle > p.skipHealthCheckWithin && !p.healthy(ctx, e.value)) {
 			p.discard(e.value)
 			p.recycled.Add(1)
-			v, err := p.spawn()
+			v, err := p.spawn(ctx)
 			if err != nil {
 				return zero, err
 			}

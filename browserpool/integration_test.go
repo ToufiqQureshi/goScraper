@@ -13,7 +13,7 @@ import (
 func requireChrome(t *testing.T) *scraper.Browser {
 	t.Helper()
 
-	b, err := scraper.New()
+	b, err := scraper.New(context.Background())
 	if err != nil {
 		t.Skipf("skipping: no Chrome available to launch: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestPoolReplacesACrashedBrowser(t *testing.T) {
 	probe := requireChrome(t)
 	probe.Close()
 
-	pool, err := New(1)
+	pool, err := New(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("New returned an error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestPoolReplacesACrashedBrowser(t *testing.T) {
 	if replacement == b {
 		t.Fatal("Get should not hand out a crashed browser")
 	}
-	if !replacement.Healthy() {
+	if !replacement.Healthy(context.Background()) {
 		t.Fatal("Get should replace a crashed browser with a healthy one")
 	}
 }

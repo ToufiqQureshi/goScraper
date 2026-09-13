@@ -2,61 +2,66 @@
 
 # goScraper
 
-A lightweight browser automation and web scraping library for Go.
+A production-focused browser automation and web scraping library for Go.
 
 > 🚧 Early development — API and internals may change.
 
 ## Features
 
-- Launch Chromium
-- Navigate to URLs
-- Extract text using CSS selectors
-- Extract HTML
-- Read element attributes
-- Click elements
-- Type into inputs
-- Wait for elements
-- Execute JavaScript
-- Context-aware browser lifecycle
-- Designed with performance and low resource usage in mind
+- Headless Chromium by default (works on servers with no display)
+- Every blocking call takes a `context.Context`, so a stuck page
+  can't hang your program
+- Browser pool with crash recovery, idle recycling, and stats
+  (`browserpool`)
+- Page (tab) pool that reuses tabs instead of opening a new one per
+  page, with the same crash recovery (`pagepool`)
+- Simple one-stop API combining both (`goscraper`)
+- Extract text, HTML, and attributes with CSS selectors
+- Click, type, wait for elements, execute JavaScript
+- Designed for long-running crawls, not just one-off scrapes
 
 ## Installation
 
 ```bash
-go get github.com/ToufiqQureshi/goScraper
+go get github.com/ToufiqQureshi/Scraper
 ```
 
 ## Quick Start
+
+The simple API launches a small pool of browsers and tabs for you and
+reuses them automatically:
 
 ```go
 package main
 
 import (
+    "context"
     "fmt"
     "log"
 
-    scraper "github.com/ToufiqQureshi/goScraper"
+    "github.com/ToufiqQureshi/Scraper/goscraper"
 )
 
 func main() {
-    browser, err := scraper.New()
+    ctx := context.Background()
+
+    s, err := goscraper.New(ctx, goscraper.Config{})
     if err != nil {
         log.Fatal(err)
     }
-    defer browser.Close()
+    defer s.Close()
 
-    page, err := browser.Open("https://example.com")
+    err = s.Get(ctx, "https://example.com", func(page *goscraper.Page) error {
+        text, err := page.Text("h1")
+        if err != nil {
+            return err
+        }
+        fmt.Println(text)
+        return nil
+    })
     if err != nil {
         log.Fatal(err)
     }
-    defer page.Close()
-
-    text, err := page.Text("h1")
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    fmt.Println(text)
 }
 ```
 
@@ -66,27 +71,34 @@ Output:
 Example Domain
 ```
 
-## Basic API
+`goscraper.Config{}` uses sensible defaults (2 browsers, 5 tabs each).
+Set `Browsers` and `PagesPerBrowser` to size the pool for your workload.
+
+## Low-level API
+
+For direct control over one browser and its tabs:
 
 ```go
-browser, _ := scraper.New()
+ctx := context.Background()
+
+browser, _ := scraper.New(ctx)
 defer browser.Close()
 
-page, _ := browser.Open("https://example.com")
+page, _ := browser.Open(ctx, "https://example.com")
 defer page.Close()
 
-text, _ := page.Text("h1")
+text, _ := page.Text(ctx, "h1")
+html, _ := page.HTML(ctx, ".content")
+href, _, _ := page.Attr(ctx, "a", "href")
 
-html, _ := page.HTML(".content")
-
-href, _ := page.Attr("a", "href")
-
-_ = page.Click("#button")
-
-_ = page.Type("#search", "hello")
-
-_ = page.Wait(".result")
+_ = page.Click(ctx, "#button")
+_ = page.Type(ctx, "#search", "hello")
+_ = page.Wait(ctx, ".result")
 ```
+
+For pooling a fleet of browsers or tabs directly, see the
+`browserpool` and `pagepool` packages — `goscraper` is a thin
+convenience layer built on top of both.
 
 ## Architecture
 
@@ -94,41 +106,43 @@ _ = page.Wait(".result")
 Go Application
       │
       ▼
-   goScraper
+   goscraper (simple API)
       │
       ▼
- Chromium / Browser
+browserpool + pagepool (reuse, crash recovery, stats)
       │
       ▼
-   Website
+scraper.Browser / scraper.Page (headless Chromium via chromedp)
+      │
+      ▼
+     Website
 ```
 
-goScraper provides a simple Go API while hiding the browser-control implementation from the developer.
+`browserpool` and `pagepool` share their concurrency-critical logic
+(race-safe close, idle recycling, crash detection) through a small
+internal generic pool, so it only needs to be correct in one place.
+
+## Known limitation
+
+If an entire Chrome *process* crashes (not just one tab), `goscraper`
+does not yet replace that browser — its tab pool will return errors
+for that one slot until the process is restarted. A crashed *tab* is
+recovered automatically, which is the far more common case. See
+`docs/ROADMAP.md`.
 
 ## Roadmap
 
-- [x] Chromium launch
-- [x] Page navigation
-- [x] CSS selector text extraction
-- [x] HTML extraction
-- [x] Attribute extraction
-- [x] Basic interactions
-- [ ] Improve reliability
-- [ ] Improve error handling
-- [ ] Performance benchmarks
-- [ ] Memory benchmarks
-- [ ] Better browser/page lifecycle
-- [ ] Direct CDP-based implementation
-- [ ] Concurrency and browser pooling
-- [ ] Production-ready API
+See [docs/ROADMAP.md](docs/ROADMAP.md) for what's built and what's next —
+including the HTTP-first hybrid engine that's the main thing still
+missing before goScraper matches its stated goal.
 
 ## Philosophy
 
-goScraper is being developed incrementally.
+goScraper is being developed incrementally, one feature at a time, and
+every feature is meant to be production-usable the day it ships — see
+`CLAUDE.md` for the full set of development rules this project follows.
 
 **Simple API → Correctness → Reliability → Performance → Scale**
-
-We focus on making existing functionality stable and well-tested before adding new features.
 
 ## Responsible Use
 
