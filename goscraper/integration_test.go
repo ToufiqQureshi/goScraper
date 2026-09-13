@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // requireChrome skips the test when no real Chrome is available to
@@ -14,7 +14,7 @@ import (
 func requireChrome(t *testing.T) {
 	t.Helper()
 
-	b, err := scraper.New(context.Background())
+	b, err := browser.New(context.Background())
 	if err != nil {
 		t.Skipf("skipping: no Chrome available to launch: %v", err)
 	}

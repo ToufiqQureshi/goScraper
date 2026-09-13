@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 func TestConfigDefaults(t *testing.T) {
@@ -66,10 +66,10 @@ func TestSlotRefusesWorkOnceClosed(t *testing.T) {
 func TestSlotRebuildSkipsWhenBrowserAlreadyReplaced(t *testing.T) {
 	// Two callers hitting the same crash must not each launch a
 	// replacement: the second sees a different browser and no-ops.
-	replaced := &scraper.Browser{}
+	replaced := &browser.Browser{}
 	sl := &slot{browser: replaced}
 
-	stale := &scraper.Browser{}
+	stale := &browser.Browser{}
 	if err := sl.rebuild(context.Background(), stale); err != nil {
 		t.Fatalf("rebuild should no-op when the browser was already replaced, got: %v", err)
 	}

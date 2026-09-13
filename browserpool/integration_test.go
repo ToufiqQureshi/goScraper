@@ -5,16 +5,16 @@ import (
 	"testing"
 	"time"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // requireChrome skips the test when no real Chrome is available to
 // launch (e.g. this sandbox). It still runs wherever Chrome is
 // installed, including the project's CI.
-func requireChrome(t *testing.T) *scraper.Browser {
+func requireChrome(t *testing.T) *browser.Browser {
 	t.Helper()
 
-	b, err := scraper.New(context.Background())
+	b, err := browser.New(context.Background())
 	if err != nil {
 		t.Skipf("skipping: no Chrome available to launch: %v", err)
 	}

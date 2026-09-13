@@ -79,12 +79,14 @@ Set `Browsers` and `PagesPerBrowser` to size the pool for your workload.
 For direct control over one browser and its tabs:
 
 ```go
+import "github.com/ToufiqQureshi/Scraper/browser"
+
 ctx := context.Background()
 
-browser, _ := scraper.New(ctx)
-defer browser.Close()
+b, _ := browser.New(ctx)
+defer b.Close()
 
-page, _ := browser.Open(ctx, "https://example.com")
+page, _ := b.Open(ctx, "https://example.com")
 defer page.Close()
 
 text, _ := page.Text(ctx, "h1")
@@ -112,14 +114,26 @@ Go Application
 browserpool + pagepool (reuse, crash recovery, stats)
       │
       ▼
-scraper.Browser / scraper.Page (headless Chromium via chromedp)
+   browser (headless Chromium via chromedp)
       │
       ▼
      Website
 ```
 
+Where everything lives:
+
+```text
+goScraper/
+├── browser/        Chromium itself: Browser and Page
+├── browserpool/    a reusable pool of browsers
+├── pagepool/       a reusable pool of tabs on one browser
+├── goscraper/      the simple one-stop API (start here)
+├── internal/pool/  the generic reuse pool both pools share
+└── docs/           roadmap and project notes
+```
+
 `browserpool` and `pagepool` share their concurrency-critical logic
-(race-safe close, idle recycling, crash detection) through a small
+(race-safe close, idle recycling, crash detection) through that
 internal generic pool, so it only needs to be correct in one place.
 
 ## Crash handling

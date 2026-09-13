@@ -10,7 +10,7 @@ import (
 
 	pool "github.com/ToufiqQureshi/Scraper/internal/pool"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // blank is what a pooled tab sits on between uses. Get moves it to
@@ -37,20 +37,20 @@ type Options struct {
 // done. It reuses a fixed number of tabs on one browser and replaces
 // any that crash or go stale.
 type Pool struct {
-	core *pool.Pool[*scraper.Page]
+	core *pool.Pool[*browser.Page]
 
 	// open and navigate exist so tests can fake tab creation and
 	// navigation without a real browser. Production code always uses
-	// browser.Open and (*scraper.Page).Navigate.
-	open     func(context.Context, string) (*scraper.Page, error)
-	navigate func(context.Context, *scraper.Page, string) error
+	// browser.Open and (*browser.Page).Navigate.
+	open     func(context.Context, string) (*browser.Page, error)
+	navigate func(context.Context, *browser.Page, string) error
 }
 
 // New opens `size` tabs on browser, in parallel, and returns a pool
 // holding them. ctx bounds only this initial launch. opts is
 // optional; pass nothing for the defaults.
-func New(ctx context.Context, browser *scraper.Browser, size int, opts ...Options) (*Pool, error) {
-	if browser == nil {
+func New(ctx context.Context, b *browser.Browser, size int, opts ...Options) (*Pool, error) {
+	if b == nil {
 		return nil, &Error{Op: "new", Err: errors.New("browser cannot be nil")}
 	}
 
@@ -59,20 +59,20 @@ func New(ctx context.Context, browser *scraper.Browser, size int, opts ...Option
 		o = opts[0]
 	}
 
-	open := browser.Open
+	open := b.Open
 	core, err := pool.New(
 		ctx,
 		size,
 		pool.Options(o),
-		func(ctx context.Context, p *scraper.Page) bool { return p.Healthy(ctx) },
-		func(ctx context.Context) (*scraper.Page, error) { return open(ctx, blank) },
-		func(p *scraper.Page) { p.Close() },
+		func(ctx context.Context, p *browser.Page) bool { return p.Healthy(ctx) },
+		func(ctx context.Context) (*browser.Page, error) { return open(ctx, blank) },
+		func(p *browser.Page) { p.Close() },
 	)
 	if err != nil {
 		return nil, &Error{Op: "new", Err: err}
 	}
 
-	navigate := func(ctx context.Context, p *scraper.Page, url string) error { return p.Navigate(ctx, url) }
+	navigate := func(ctx context.Context, p *browser.Page, url string) error { return p.Navigate(ctx, url) }
 	return &Pool{core: core, open: open, navigate: navigate}, nil
 }
 
@@ -80,7 +80,7 @@ func New(ctx context.Context, browser *scraper.Browser, size int, opts ...Option
 // reusing the same tab. A page that crashed or has sat idle too long
 // is replaced automatically. It blocks until a page is free, ctx is
 // done, or the pool closes.
-func (p *Pool) Get(ctx context.Context, url string) (*scraper.Page, error) {
+func (p *Pool) Get(ctx context.Context, url string) (*browser.Page, error) {
 	page, err := p.core.Get(ctx)
 	if err != nil {
 		return nil, &Error{Op: "get", Err: err}
@@ -106,7 +106,7 @@ func (p *Pool) Get(ctx context.Context, url string) (*scraper.Page, error) {
 // Release gives a page back to the pool so someone else can use it.
 // If the pool has already been closed, the page is closed instead of
 // being kept around.
-func (p *Pool) Release(page *scraper.Page) {
+func (p *Pool) Release(page *browser.Page) {
 	if page == nil {
 		return
 	}

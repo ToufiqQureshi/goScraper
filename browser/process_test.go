@@ -1,4 +1,4 @@
-package scraper_test
+package browser_test
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // processState reads a Linux process's state letter from /proc. ok is
@@ -45,9 +45,9 @@ func TestCloseLeavesNoChromeProcessBehind(t *testing.T) {
 		t.Skip("skipping: process check reads /proc, which is Linux-only")
 	}
 
-	browser := requireChrome(t)
+	b := requireChrome(t)
 
-	pid := browser.PID()
+	pid := b.PID()
 	if pid == 0 {
 		t.Fatal("expected a real Chrome PID for a running browser")
 	}
@@ -55,7 +55,7 @@ func TestCloseLeavesNoChromeProcessBehind(t *testing.T) {
 		t.Fatalf("Chrome process %d should be running before Close", pid)
 	}
 
-	browser.Close()
+	b.Close()
 
 	// chromedp reaps the process asynchronously, so allow a moment for
 	// it, but never accept a lingering or zombie process.
@@ -81,16 +81,16 @@ func TestCloseLeavesNoChromeProcessBehind(t *testing.T) {
 // must not hand out a PID that may since have been reused by an
 // unrelated process.
 func TestPIDIsZeroOnceClosed(t *testing.T) {
-	browser := requireChrome(t)
-	browser.Close()
+	b := requireChrome(t)
+	b.Close()
 
-	if pid := browser.PID(); pid != 0 {
+	if pid := b.PID(); pid != 0 {
 		t.Fatalf("expected PID 0 after Close, got %d", pid)
 	}
 }
 
 func TestPIDIsZeroOnZeroValueBrowser(t *testing.T) {
-	var b scraper.Browser
+	var b browser.Browser
 	if pid := b.PID(); pid != 0 {
 		t.Fatalf("expected PID 0 for a browser that was never started, got %d", pid)
 	}

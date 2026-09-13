@@ -3,22 +3,22 @@ package goscraper
 import (
 	"context"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
-// Page is a scraper.Page bound to one request's context, so callbacks
+// Page is a browser.Page bound to one request's context, so callbacks
 // passed to Scraper.Get can call page.Text("h1") without having to
 // thread ctx through every call themselves. Use Raw() to reach the
 // context-aware methods directly (e.g. to pass a shorter per-call
 // timeout than the request's own).
 type Page struct {
-	page *scraper.Page
+	page *browser.Page
 	ctx  context.Context
 }
 
 // Raw returns the underlying page and the context Get was called
 // with, for callers who need explicit control over context per call.
-func (p *Page) Raw() (*scraper.Page, context.Context) {
+func (p *Page) Raw() (*browser.Page, context.Context) {
 	return p.page, p.ctx
 }
 

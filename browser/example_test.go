@@ -1,23 +1,23 @@
-package scraper_test
+package browser_test
 
 import (
 	"context"
 	"fmt"
 	"log"
 
-	"github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 func Example() {
 	ctx := context.Background()
 
-	browser, err := scraper.New(ctx)
+	b, err := browser.New(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer browser.Close()
+	defer b.Close()
 
-	page, err := browser.Open(ctx, "https://example.com")
+	page, err := b.Open(ctx, "https://example.com")
 	if err != nil {
 		log.Fatal(err)
 	}

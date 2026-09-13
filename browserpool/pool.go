@@ -9,7 +9,7 @@ import (
 
 	pool "github.com/ToufiqQureshi/Scraper/internal/pool"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // Stats is a snapshot of pool activity, useful for production
@@ -31,7 +31,7 @@ type Options struct {
 // It reuses a fixed number of browsers and replaces any that crash
 // or go stale.
 type Pool struct {
-	core *pool.Pool[*scraper.Browser]
+	core *pool.Pool[*browser.Browser]
 }
 
 // New starts `size` browsers, in parallel, and returns a pool holding
@@ -47,9 +47,9 @@ func New(ctx context.Context, size int, opts ...Options) (*Pool, error) {
 		ctx,
 		size,
 		pool.Options(o),
-		func(ctx context.Context, b *scraper.Browser) bool { return b.Healthy(ctx) },
-		scraper.New,
-		func(b *scraper.Browser) { b.Close() },
+		func(ctx context.Context, b *browser.Browser) bool { return b.Healthy(ctx) },
+		browser.New,
+		func(b *browser.Browser) { b.Close() },
 	)
 	if err != nil {
 		return nil, &Error{Op: "new", Err: err}
@@ -61,7 +61,7 @@ func New(ctx context.Context, size int, opts ...Options) (*Pool, error) {
 // Get takes a free browser out of the pool. A browser that crashed or
 // has sat idle too long is replaced automatically. It blocks until a
 // browser is free, ctx is done, or the pool closes.
-func (p *Pool) Get(ctx context.Context) (*scraper.Browser, error) {
+func (p *Pool) Get(ctx context.Context) (*browser.Browser, error) {
 	b, err := p.core.Get(ctx)
 	if err != nil {
 		return nil, &Error{Op: "get", Err: err}
@@ -72,7 +72,7 @@ func (p *Pool) Get(ctx context.Context) (*scraper.Browser, error) {
 // Release gives a browser back to the pool so someone else can use it.
 // If the pool has already been closed, the browser is closed instead
 // of being kept around.
-func (p *Pool) Release(b *scraper.Browser) {
+func (p *Pool) Release(b *browser.Browser) {
 	if b == nil {
 		return
 	}

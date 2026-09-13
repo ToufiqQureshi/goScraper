@@ -8,13 +8,13 @@ import (
 
 	pool "github.com/ToufiqQureshi/Scraper/internal/pool"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // newTestPool builds a pool without launching real Chrome, so these
 // tests can run anywhere. The hard concurrency/recycling logic lives
 // in internal/pool and is tested exhaustively there; these tests only
-// check that this package wires it up correctly for *scraper.Page,
+// check that this package wires it up correctly for *browser.Page,
 // including the navigate-then-serve behavior specific to pages.
 func newTestPool(t *testing.T, size int) *Pool {
 	t.Helper()
@@ -23,9 +23,9 @@ func newTestPool(t *testing.T, size int) *Pool {
 		context.Background(),
 		size,
 		pool.Options{},
-		func(context.Context, *scraper.Page) bool { return true },
-		func(context.Context) (*scraper.Page, error) { return &scraper.Page{}, nil },
-		func(*scraper.Page) {},
+		func(context.Context, *browser.Page) bool { return true },
+		func(context.Context) (*browser.Page, error) { return &browser.Page{}, nil },
+		func(*browser.Page) {},
 	)
 	if err != nil {
 		t.Fatalf("pool.New returned an error: %v", err)
@@ -33,8 +33,8 @@ func newTestPool(t *testing.T, size int) *Pool {
 
 	return &Pool{
 		core:     core,
-		open:     func(context.Context, string) (*scraper.Page, error) { return &scraper.Page{}, nil },
-		navigate: func(context.Context, *scraper.Page, string) error { return nil },
+		open:     func(context.Context, string) (*browser.Page, error) { return &browser.Page{}, nil },
+		navigate: func(context.Context, *browser.Page, string) error { return nil },
 	}
 }
 
@@ -62,7 +62,7 @@ func TestGetNavigatesTheReusedPage(t *testing.T) {
 	defer p.Close()
 
 	var gotURL string
-	p.navigate = func(_ context.Context, _ *scraper.Page, url string) error {
+	p.navigate = func(_ context.Context, _ *browser.Page, url string) error {
 		gotURL = url
 		return nil
 	}
@@ -81,11 +81,11 @@ func TestGetReplacesPageWhenNavigateFails(t *testing.T) {
 	defer p.Close()
 
 	navigateErr := errors.New("tab crashed mid-navigation")
-	p.navigate = func(context.Context, *scraper.Page, string) error { return navigateErr }
+	p.navigate = func(context.Context, *browser.Page, string) error { return navigateErr }
 
-	opened := &scraper.Page{}
+	opened := &browser.Page{}
 	var openedURL string
-	p.open = func(_ context.Context, url string) (*scraper.Page, error) {
+	p.open = func(_ context.Context, url string) (*browser.Page, error) {
 		openedURL = url
 		return opened, nil
 	}
@@ -106,9 +106,9 @@ func TestGetPropagatesFallbackOpenError(t *testing.T) {
 	p := newTestPool(t, 1)
 	defer p.Close()
 
-	p.navigate = func(context.Context, *scraper.Page, string) error { return errors.New("crashed") }
+	p.navigate = func(context.Context, *browser.Page, string) error { return errors.New("crashed") }
 	openErr := errors.New("chrome is gone")
-	p.open = func(context.Context, string) (*scraper.Page, error) { return nil, openErr }
+	p.open = func(context.Context, string) (*browser.Page, error) { return nil, openErr }
 
 	if _, err := p.Get(context.Background(), "https://example.com"); !errors.Is(err, openErr) {
 		t.Fatalf("expected the fallback open error to propagate, got: %v", err)

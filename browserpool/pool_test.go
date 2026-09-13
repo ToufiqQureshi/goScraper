@@ -8,13 +8,13 @@ import (
 
 	pool "github.com/ToufiqQureshi/Scraper/internal/pool"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // newTestPool builds a pool without launching real Chrome, so these
 // tests can run anywhere. The hard concurrency/recycling logic lives
 // in internal/pool and is tested exhaustively there; these tests only
-// check that this package wires it up correctly for *scraper.Browser.
+// check that this package wires it up correctly for *browser.Browser.
 func newTestPool(t *testing.T, size int) *Pool {
 	t.Helper()
 
@@ -22,9 +22,9 @@ func newTestPool(t *testing.T, size int) *Pool {
 		context.Background(),
 		size,
 		pool.Options{},
-		func(context.Context, *scraper.Browser) bool { return true },
-		func(context.Context) (*scraper.Browser, error) { return &scraper.Browser{}, nil },
-		func(*scraper.Browser) {},
+		func(context.Context, *browser.Browser) bool { return true },
+		func(context.Context) (*browser.Browser, error) { return &browser.Browser{}, nil },
+		func(*browser.Browser) {},
 	)
 	if err != nil {
 		t.Fatalf("pool.New returned an error: %v", err)

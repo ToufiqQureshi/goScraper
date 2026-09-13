@@ -1,20 +1,20 @@
-package scraper_test
+package browser_test
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // requireChrome skips the test when no real Chrome is available to
 // launch (e.g. this sandbox). It still runs wherever Chrome is
 // installed, including the project's CI.
-func requireChrome(t *testing.T) *scraper.Browser {
+func requireChrome(t *testing.T) *browser.Browser {
 	t.Helper()
 
-	b, err := scraper.New(context.Background())
+	b, err := browser.New(context.Background())
 	if err != nil {
 		t.Skipf("skipping: no Chrome available to launch: %v", err)
 	}
@@ -22,10 +22,10 @@ func requireChrome(t *testing.T) *scraper.Browser {
 }
 
 func TestPageActionRespectsContextTimeout(t *testing.T) {
-	browser := requireChrome(t)
-	defer browser.Close()
+	b := requireChrome(t)
+	defer b.Close()
 
-	page, err := browser.Open(context.Background(), "https://example.com")
+	page, err := b.Open(context.Background(), "https://example.com")
 	if err != nil {
 		t.Fatalf("Open returned an error: %v", err)
 	}
@@ -50,10 +50,10 @@ func TestPageActionRespectsContextTimeout(t *testing.T) {
 }
 
 func TestPageActionSucceedsWithinDeadline(t *testing.T) {
-	browser := requireChrome(t)
-	defer browser.Close()
+	b := requireChrome(t)
+	defer b.Close()
 
-	page, err := browser.Open(context.Background(), "https://example.com")
+	page, err := b.Open(context.Background(), "https://example.com")
 	if err != nil {
 		t.Fatalf("Open returned an error: %v", err)
 	}

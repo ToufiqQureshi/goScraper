@@ -5,16 +5,16 @@ import (
 	"testing"
 	"time"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // requireChrome skips the test when no real Chrome is available to
 // launch (e.g. this sandbox). It still runs wherever Chrome is
 // installed, including the project's CI.
-func requireChrome(t *testing.T) *scraper.Browser {
+func requireChrome(t *testing.T) *browser.Browser {
 	t.Helper()
 
-	b, err := scraper.New(context.Background())
+	b, err := browser.New(context.Background())
 	if err != nil {
 		t.Skipf("skipping: no Chrome available to launch: %v", err)
 	}
@@ -22,11 +22,11 @@ func requireChrome(t *testing.T) *scraper.Browser {
 }
 
 func TestPoolReusesTheSameTabAcrossPages(t *testing.T) {
-	browser := requireChrome(t)
-	defer browser.Close()
+	b := requireChrome(t)
+	defer b.Close()
 
 	ctx := context.Background()
-	pool, err := New(ctx, browser, 1)
+	pool, err := New(ctx, b, 1)
 	if err != nil {
 		t.Fatalf("New returned an error: %v", err)
 	}
@@ -57,14 +57,14 @@ func TestPoolReusesTheSameTabAcrossPages(t *testing.T) {
 }
 
 func TestOptionsRecycleAfterIsRespected(t *testing.T) {
-	browser := requireChrome(t)
-	defer browser.Close()
+	b := requireChrome(t)
+	defer b.Close()
 
 	ctx := context.Background()
 
 	// A short RecycleAfter must actually reach the pool: a tab idle
 	// past it is replaced even though it is perfectly healthy.
-	pool, err := New(ctx, browser, 1, Options{RecycleAfter: 50 * time.Millisecond})
+	pool, err := New(ctx, b, 1, Options{RecycleAfter: 50 * time.Millisecond})
 	if err != nil {
 		t.Fatalf("New returned an error: %v", err)
 	}
@@ -93,11 +93,11 @@ func TestOptionsRecycleAfterIsRespected(t *testing.T) {
 }
 
 func TestPoolReplacesACrashedPage(t *testing.T) {
-	browser := requireChrome(t)
-	defer browser.Close()
+	b := requireChrome(t)
+	defer b.Close()
 
 	ctx := context.Background()
-	pool, err := New(ctx, browser, 1)
+	pool, err := New(ctx, b, 1)
 	if err != nil {
 		t.Fatalf("New returned an error: %v", err)
 	}

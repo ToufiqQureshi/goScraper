@@ -3,10 +3,9 @@ package goscraper
 import (
 	"context"
 	"errors"
-
 	"sync"
 
-	scraper "github.com/ToufiqQureshi/Scraper"
+	"github.com/ToufiqQureshi/Scraper/browser"
 	"github.com/ToufiqQureshi/Scraper/pagepool"
 )
 
@@ -20,46 +19,46 @@ type slot struct {
 	cfg Config
 
 	mu      sync.Mutex
-	browser *scraper.Browser
+	browser *browser.Browser
 	pages   *pagepool.Pool
 	closed  bool
 }
 
 // newSlot launches one browser and opens its pool of tabs.
 func newSlot(ctx context.Context, cfg Config) (*slot, error) {
-	browser, pages, err := startPair(ctx, cfg)
+	b, pages, err := startPair(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &slot{cfg: cfg, browser: browser, pages: pages}, nil
+	return &slot{cfg: cfg, browser: b, pages: pages}, nil
 }
 
 // startPair launches a browser and its tab pool together, closing the
 // browser if the pool can't be opened on it.
-func startPair(ctx context.Context, cfg Config) (*scraper.Browser, *pagepool.Pool, error) {
-	browser, err := scraper.New(ctx)
+func startPair(ctx context.Context, cfg Config) (*browser.Browser, *pagepool.Pool, error) {
+	b, err := browser.New(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	pages, err := pagepool.New(ctx, browser, cfg.PagesPerBrowser, pagepool.Options{
+	pages, err := pagepool.New(ctx, b, cfg.PagesPerBrowser, pagepool.Options{
 		RecycleAfter:          cfg.RecycleAfter,
 		SkipHealthCheckWithin: cfg.SkipHealthCheckWithin,
 	})
 	if err != nil {
-		browser.Close()
+		b.Close()
 		return nil, nil, err
 	}
 
-	return browser, pages, nil
+	return b, pages, nil
 }
 
 // get returns a page for url plus the pool it must be released to. If
 // the request failed because this slot's whole browser died, the slot
 // is rebuilt once and the request retried on the fresh browser.
-func (s *slot) get(ctx context.Context, url string) (*scraper.Page, *pagepool.Pool, error) {
-	browser, pages, err := s.current()
+func (s *slot) get(ctx context.Context, url string) (*browser.Page, *pagepool.Pool, error) {
+	b, pages, err := s.current()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,11 +71,11 @@ func (s *slot) get(ctx context.Context, url string) (*scraper.Page, *pagepool.Po
 	// Don't blame the browser for the caller giving up, and don't
 	// blame it for one bad URL either: ask the browser itself whether
 	// it is still alive before deciding to replace it.
-	if ctx.Err() != nil || browser.Healthy(ctx) {
+	if ctx.Err() != nil || b.Healthy(ctx) {
 		return nil, nil, err
 	}
 
-	if rebuildErr := s.rebuild(ctx, browser); rebuildErr != nil {
+	if rebuildErr := s.rebuild(ctx, b); rebuildErr != nil {
 		return nil, nil, rebuildErr
 	}
 
@@ -94,7 +93,7 @@ func (s *slot) get(ctx context.Context, url string) (*scraper.Page, *pagepool.Po
 }
 
 // current reads this slot's browser and pool under lock.
-func (s *slot) current() (*scraper.Browser, *pagepool.Pool, error) {
+func (s *slot) current() (*browser.Browser, *pagepool.Pool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -108,7 +107,7 @@ func (s *slot) current() (*scraper.Browser, *pagepool.Pool, error) {
 // rebuild replaces a dead browser and its tabs. dead is the browser
 // the caller saw fail, so concurrent callers that hit the same crash
 // don't each launch a replacement.
-func (s *slot) rebuild(ctx context.Context, dead *scraper.Browser) error {
+func (s *slot) rebuild(ctx context.Context, dead *browser.Browser) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -119,14 +118,14 @@ func (s *slot) rebuild(ctx context.Context, dead *scraper.Browser) error {
 		return nil // someone else already replaced it
 	}
 
-	browser, pages, err := startPair(ctx, s.cfg)
+	b, pages, err := startPair(ctx, s.cfg)
 	if err != nil {
 		return err
 	}
 
 	s.pages.Close()
 	s.browser.Close()
-	s.browser, s.pages = browser, pages
+	s.browser, s.pages = b, pages
 
 	return nil
 }
