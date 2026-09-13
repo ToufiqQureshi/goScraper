@@ -136,6 +136,31 @@ goScraper/
 (race-safe close, idle recycling, crash detection) through that
 internal generic pool, so it only needs to be correct in one place.
 
+## Running in Docker or on Ubuntu 23.10+
+
+Chrome's sandbox needs unprivileged user namespaces, which most
+containers and Ubuntu 23.10+ block. Where they're blocked, Chrome exits
+at startup with `No usable sandbox!`.
+
+Two ways out, best first:
+
+1. **Allow the sandbox.** On a host you control:
+   `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
+   In Docker, run with `--security-opt seccomp=unconfined` or grant
+   `SYS_ADMIN`. This keeps the sandbox — a real security boundary
+   between a malicious page and your machine.
+
+2. **Turn the sandbox off**, if you can't change the environment and
+   you trust the pages you visit:
+
+```go
+s, err := goscraper.New(ctx, goscraper.Config{
+    Browser: browser.Options{NoSandbox: true},
+})
+```
+
+`browserpool.Options` and `browser.New` take the same option.
+
 ## Crash handling
 
 Both levels recover on their own:

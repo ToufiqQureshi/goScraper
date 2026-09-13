@@ -5,24 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ToufiqQureshi/Scraper/browser"
+	"github.com/ToufiqQureshi/Scraper/internal/chrometest"
 )
 
-// requireChrome skips the test when no real Chrome is available to
-// launch (e.g. this sandbox). It still runs wherever Chrome is
-// installed, including the project's CI.
-func requireChrome(t *testing.T) *browser.Browser {
-	t.Helper()
-
-	b, err := browser.New(context.Background())
-	if err != nil {
-		t.Skipf("skipping: no Chrome available to launch: %v", err)
-	}
-	return b
-}
-
 func TestOptionsRecycleAfterIsRespected(t *testing.T) {
-	probe := requireChrome(t)
+	probe := chrometest.Require(t)
 	probe.Close()
 
 	// A short RecycleAfter must actually reach the pool: a browser
@@ -56,7 +43,7 @@ func TestOptionsRecycleAfterIsRespected(t *testing.T) {
 }
 
 func TestDefaultOptionsDoNotRecycleImmediately(t *testing.T) {
-	probe := requireChrome(t)
+	probe := chrometest.Require(t)
 	probe.Close()
 
 	// With defaults, a browser handed straight back must be reused,
@@ -85,7 +72,7 @@ func TestDefaultOptionsDoNotRecycleImmediately(t *testing.T) {
 }
 
 func TestPoolReplacesACrashedBrowser(t *testing.T) {
-	probe := requireChrome(t)
+	probe := chrometest.Require(t)
 	probe.Close()
 
 	pool, err := New(context.Background(), 1)

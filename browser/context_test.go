@@ -5,24 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ToufiqQureshi/Scraper/browser"
+	"github.com/ToufiqQureshi/Scraper/internal/chrometest"
 )
 
-// requireChrome skips the test when no real Chrome is available to
-// launch (e.g. this sandbox). It still runs wherever Chrome is
-// installed, including the project's CI.
-func requireChrome(t *testing.T) *browser.Browser {
-	t.Helper()
-
-	b, err := browser.New(context.Background())
-	if err != nil {
-		t.Skipf("skipping: no Chrome available to launch: %v", err)
-	}
-	return b
-}
-
 func TestPageActionRespectsContextTimeout(t *testing.T) {
-	b := requireChrome(t)
+	b := chrometest.Require(t)
 	defer b.Close()
 
 	page, err := b.Open(context.Background(), "https://example.com")
@@ -50,7 +37,7 @@ func TestPageActionRespectsContextTimeout(t *testing.T) {
 }
 
 func TestPageActionSucceedsWithinDeadline(t *testing.T) {
-	b := requireChrome(t)
+	b := chrometest.Require(t)
 	defer b.Close()
 
 	page, err := b.Open(context.Background(), "https://example.com")

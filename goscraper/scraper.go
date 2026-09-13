@@ -9,6 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ToufiqQureshi/Scraper/browser"
 )
 
 // Config controls pool sizes and recycling. Zero values fall back to
@@ -23,6 +25,11 @@ type Config struct {
 	// SkipHealthCheckWithin avoids a health check for a tab used this
 	// recently (default 2 seconds).
 	SkipHealthCheckWithin time.Duration
+
+	// Browser is passed to every Chrome this scraper launches. Set
+	// Browser.NoSandbox when running somewhere Chrome's sandbox can't
+	// start, such as a container or Ubuntu 23.10+.
+	Browser browser.Options
 }
 
 func (c Config) withDefaults() Config {

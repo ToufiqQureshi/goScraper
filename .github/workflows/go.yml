@@ -10,6 +10,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      # Fail, don't skip, if Chrome can't launch here. Without this the
+      # suite goes green while every browser test quietly skips itself.
+      GOSCRAPER_REQUIRE_CHROME: "1"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,8 +25,28 @@ jobs:
           go-version: "1.24"
           cache: true
 
+      - name: Allow Chrome's sandbox to start
+        # Ubuntu 23.10+ blocks the unprivileged user namespaces Chrome's
+        # sandbox needs, so Chrome dies at startup with "No usable
+        # sandbox!". Relaxing it here lets CI test the same sandboxed
+        # configuration the library ships by default, rather than
+        # papering over it with --no-sandbox.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
       - name: Build
         run: go build -v ./...
 
       - name: Test
-        run: go test -v ./...
+        run: go test -race -v ./...

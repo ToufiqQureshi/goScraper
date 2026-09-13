@@ -53,6 +53,18 @@ not what this project is for.
       Chrome process ID, and a test asserts `Close` leaves no running
       or zombie process behind (the failure mode that turns a day-long
       crawl into thousands of dead processes).
+- [x] **Runs in containers** — `--disable-dev-shm-usage` by default
+      (containers give /dev/shm 64MB, which crashes Chrome on heavy
+      pages) and an explicit `browser.Options{NoSandbox: true}` for
+      environments that block the sandbox. Off by default: the sandbox
+      is a real security boundary, so turning it off stays a conscious
+      choice.
+- [x] **CI actually runs the browser tests** — they used to skip in CI
+      (Chrome couldn't start there), so the suite went green without
+      ever exercising a real browser. CI now enables the sandbox and
+      sets `GOSCRAPER_REQUIRE_CHROME=1`, which turns a failed launch
+      into a failed build instead of a silent skip. CI also checks
+      gofmt and vet, and runs tests under `-race`.
 
 ---
 

@@ -15,16 +15,48 @@ type Browser struct {
 	cancel      context.CancelFunc
 }
 
+// Options tunes how Chrome is launched. The zero value is the safe
+// default: headless, with Chrome's own sandbox left switched on.
+type Options struct {
+	// NoSandbox launches Chrome with --no-sandbox.
+	//
+	// You need this in most containers, and on Ubuntu 23.10+, which
+	// block the unprivileged user namespaces Chrome's sandbox relies
+	// on; without it Chrome exits at startup with "No usable sandbox!".
+	//
+	// It is off by default because that sandbox is a real security
+	// boundary: it is what stops a malicious page that exploits a
+	// browser bug from reaching the rest of the machine. Prefer fixing
+	// the environment (give the container the right permissions) and
+	// use this only when you can't, or when you already trust every
+	// page you visit.
+	NoSandbox bool
+}
+
 // New launches a headless Chromium browser. Headless is the correct
 // default for production: servers have no display to show a real
 // window on. ctx bounds only the launch itself; cancelling it after
-// New returns has no effect (use Close for that).
-func New(ctx context.Context) (*Browser, error) {
-	allocCtx, allocCancel := chromedp.NewExecAllocator(
-		context.Background(),
+// New returns has no effect (use Close for that). opts is optional;
+// pass nothing for the defaults.
+func New(ctx context.Context, opts ...Options) (*Browser, error) {
+	var o Options
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+
+	flags := []chromedp.ExecAllocatorOption{
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
-	)
+		// Containers usually give /dev/shm only 64MB, which makes
+		// Chrome crash on heavier pages. Writing shared memory to
+		// /tmp instead costs a little speed and avoids that entirely.
+		chromedp.Flag("disable-dev-shm-usage", true),
+	}
+	if o.NoSandbox {
+		flags = append(flags, chromedp.Flag("no-sandbox", true))
+	}
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), flags...)
 
 	browserCtx, cancel := chromedp.NewContext(allocCtx)
 

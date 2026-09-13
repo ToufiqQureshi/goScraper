@@ -37,7 +37,7 @@ func newSlot(ctx context.Context, cfg Config) (*slot, error) {
 // startPair launches a browser and its tab pool together, closing the
 // browser if the pool can't be opened on it.
 func startPair(ctx context.Context, cfg Config) (*browser.Browser, *pagepool.Pool, error) {
-	b, err := browser.New(ctx)
+	b, err := browser.New(ctx, cfg.Browser)
 	if err != nil {
 		return nil, nil, err
 	}

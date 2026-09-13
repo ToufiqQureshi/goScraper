@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ToufiqQureshi/Scraper/browser"
+	"github.com/ToufiqQureshi/Scraper/internal/chrometest"
 )
 
 // processState reads a Linux process's state letter from /proc. ok is
@@ -45,7 +46,7 @@ func TestCloseLeavesNoChromeProcessBehind(t *testing.T) {
 		t.Skip("skipping: process check reads /proc, which is Linux-only")
 	}
 
-	b := requireChrome(t)
+	b := chrometest.Require(t)
 
 	pid := b.PID()
 	if pid == 0 {
@@ -81,7 +82,7 @@ func TestCloseLeavesNoChromeProcessBehind(t *testing.T) {
 // must not hand out a PID that may since have been reused by an
 // unrelated process.
 func TestPIDIsZeroOnceClosed(t *testing.T) {
-	b := requireChrome(t)
+	b := chrometest.Require(t)
 	b.Close()
 
 	if pid := b.PID(); pid != 0 {

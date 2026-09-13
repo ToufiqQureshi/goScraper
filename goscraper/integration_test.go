@@ -5,24 +5,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ToufiqQureshi/Scraper/browser"
+	"github.com/ToufiqQureshi/Scraper/internal/chrometest"
 )
 
-// requireChrome skips the test when no real Chrome is available to
-// launch (e.g. this sandbox). It still runs wherever Chrome is
-// installed, including the project's CI.
-func requireChrome(t *testing.T) {
-	t.Helper()
-
-	b, err := browser.New(context.Background())
-	if err != nil {
-		t.Skipf("skipping: no Chrome available to launch: %v", err)
-	}
-	b.Close()
-}
-
 func TestScraperGetFetchesAPage(t *testing.T) {
-	requireChrome(t)
+	chrometest.Require(t)
 
 	ctx := context.Background()
 	s, err := New(ctx, Config{Browsers: 1, PagesPerBrowser: 1})
@@ -46,7 +33,7 @@ func TestScraperGetFetchesAPage(t *testing.T) {
 }
 
 func TestScraperGetReturnsCallbackError(t *testing.T) {
-	requireChrome(t)
+	chrometest.Require(t)
 
 	ctx := context.Background()
 	s, err := New(ctx, Config{Browsers: 1, PagesPerBrowser: 1})
@@ -67,7 +54,7 @@ type errorString string
 func (e errorString) Error() string { return string(e) }
 
 func TestScraperReplacesACrashedBrowser(t *testing.T) {
-	requireChrome(t)
+	chrometest.Require(t)
 
 	ctx := context.Background()
 	s, err := New(ctx, Config{Browsers: 1, PagesPerBrowser: 1})
@@ -114,7 +101,7 @@ func TestScraperReplacesACrashedBrowser(t *testing.T) {
 }
 
 func TestScraperKeepsWorkingAfterRepeatedBrowserCrashes(t *testing.T) {
-	requireChrome(t)
+	chrometest.Require(t)
 
 	ctx := context.Background()
 	s, err := New(ctx, Config{Browsers: 1, PagesPerBrowser: 1})
@@ -138,7 +125,7 @@ func TestScraperKeepsWorkingAfterRepeatedBrowserCrashes(t *testing.T) {
 }
 
 func TestScraperHandlesConcurrentGetsAcrossBrowsers(t *testing.T) {
-	requireChrome(t)
+	chrometest.Require(t)
 
 	ctx := context.Background()
 	s, err := New(ctx, Config{Browsers: 2, PagesPerBrowser: 2})

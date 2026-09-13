@@ -25,6 +25,11 @@ type Options struct {
 	// SkipHealthCheckWithin avoids a health check for a browser used
 	// this recently.
 	SkipHealthCheckWithin time.Duration
+
+	// Browser is passed to every browser this pool launches, including
+	// replacements for crashed ones. Set Browser.NoSandbox when running
+	// somewhere Chrome's sandbox can't start, such as a container.
+	Browser browser.Options
 }
 
 // Pool hands out browsers and takes them back when you're done.
@@ -46,9 +51,9 @@ func New(ctx context.Context, size int, opts ...Options) (*Pool, error) {
 	core, err := pool.New(
 		ctx,
 		size,
-		pool.Options(o),
+		pool.Options{RecycleAfter: o.RecycleAfter, SkipHealthCheckWithin: o.SkipHealthCheckWithin},
 		func(ctx context.Context, b *browser.Browser) bool { return b.Healthy(ctx) },
-		browser.New,
+		func(ctx context.Context) (*browser.Browser, error) { return browser.New(ctx, o.Browser) },
 		func(b *browser.Browser) { b.Close() },
 	)
 	if err != nil {
