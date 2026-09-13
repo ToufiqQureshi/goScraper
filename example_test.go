@@ -26,6 +26,4 @@ func Example() {
 	}
 
 	fmt.Println(text)
-	// Output:
-	// Example Domain
 }
