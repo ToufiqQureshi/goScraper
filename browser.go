@@ -14,12 +14,14 @@ type Browser struct {
 	cancel      context.CancelFunc
 }
 
-// New launches a visible Chromium browser.
+// New launches a headless Chromium browser. Headless is the correct
+// default for production: servers have no display to show a real
+// window on.
 func New() (*Browser, error) {
 	allocCtx, allocCancel := chromedp.NewExecAllocator(
 		context.Background(),
-		chromedp.Flag("headless", false),
-		chromedp.Flag("disable-gpu", false),
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
 	)
 
 	ctx, cancel := chromedp.NewContext(allocCtx)
@@ -53,6 +55,18 @@ func (b *Browser) Open(url string) (*Page, error) {
 		ctx:    ctx,
 		cancel: cancel,
 	}, nil
+}
+
+// Healthy reports whether the browser can still respond to commands.
+// A crashed or killed Chrome process fails this check, so callers
+// (like a pool) know to discard it instead of handing out a dead browser.
+func (b *Browser) Healthy() bool {
+	if b.ctx == nil || b.ctx.Err() != nil {
+		return false
+	}
+
+	var result int
+	return chromedp.Run(b.ctx, chromedp.Evaluate("1", &result)) == nil
 }
 
 // Close shuts down Chromium and releases all resources.
