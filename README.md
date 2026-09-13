@@ -1,6 +1,6 @@
-# goScraper
-
 <p align="center"><img src="https://i.ibb.co/sdCWkC8P/file-0000000072248207bc2389779c2a0175.png" alt="goScraper Logo" width="180"></p>
+
+            #goScraper
 
 A lightweight browser automation and web scraping library for Go.
 
