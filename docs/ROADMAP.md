@@ -28,14 +28,18 @@ not what this project is for.
 - [x] **Basic stats** — counts of browsers created, recycled, and
       checked in/out.
 - [x] **Headless by default** — works on a real server with no display.
+- [x] **Page pooling** — reuse tabs inside each browser instead of
+      opening/closing a new one per page (`pagepool`). Shares its
+      core reuse/crash-recovery logic with `browserpool` via a small
+      internal generic pool (`internal/pool`), so that hard
+      concurrency code is correct in one place instead of two.
 
 ---
 
 ## Next up
 
-- [ ] **1. Page pooling** — reuse tabs inside each browser instead of
-      opening/closing a new one per page. Fewer tab spin-ups, lower
-      memory, faster scrapes.
+- [ ] **HTTP fetcher** — see P0 item 2 below. This starts the actual
+      hybrid engine: HTTP by default, browser only when needed.
 
 ---
 

@@ -50,3 +50,24 @@ func TestPageCloseDoesNotPanic(t *testing.T) {
 	p := &Page{}
 	p.Close()
 }
+
+func TestPageNavigateRejectsEmptyURL(t *testing.T) {
+	p := &Page{}
+	if err := p.Navigate(""); err == nil {
+		t.Fatal("Navigate should reject an empty url")
+	}
+}
+
+func TestPageNavigateOnUnopenedPageReturnsError(t *testing.T) {
+	p := &Page{}
+	if err := p.Navigate("https://example.com"); err == nil {
+		t.Fatal("Navigate should fail on a page that was never opened")
+	}
+}
+
+func TestPageHealthyOnZeroValueIsFalse(t *testing.T) {
+	p := &Page{}
+	if p.Healthy() {
+		t.Fatal("a page with no running tab should not report healthy")
+	}
+}
