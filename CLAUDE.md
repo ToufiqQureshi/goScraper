@@ -913,7 +913,48 @@ finished. Silence about a known weakness is the same as hiding it.
 
 ---
 
-# 34. Final Rule
+# 34. Fix It, Don't Just Report It
+
+Reporting a gap is not the same as handling it. Section 33 exists so
+nothing stays hidden — **not** so known problems can be listed and
+left in the code.
+
+The rule is simple:
+
+> **If you found it and you can fix it, fix it in the same pass. Only
+> report-and-defer when fixing is genuinely blocked.**
+
+"Genuinely blocked" means one of these, and you must say which:
+
+- It needs a decision only the owner can make (a product or API
+  trade-off, not a technical one).
+- It depends on something unavailable right now (a missing
+  credential, an environment that can't run it, an upstream bug).
+- It is a large feature of its own, already on the roadmap, and
+  fixing it now would mean shipping it half-done — which Section 32
+  forbids.
+
+Everything else gets fixed now. Specifically, these are **never**
+valid reasons to defer:
+
+- "It's an edge case."
+- "It's rare in practice."
+- "It's hard to test here."  ← write the test so it runs where it
+  *can* run (e.g. CI with a real browser) and skips cleanly elsewhere.
+- "I already documented it."  ← documentation is not a fix.
+- "The owner didn't explicitly ask me to fix it."
+
+When you do defer, the report must say: what the gap is, exactly why
+it is blocked (from the list above), and what unblocks it. A gap
+listed without that reason is an unfinished task, not a disclosure.
+
+Do not hand the owner a list of things you could have fixed and
+didn't. They are trusting the implementation, not auditing it — a
+disclosure they have to act on themselves defeats the point.
+
+---
+
+# 35. Final Rule
 
 **Keep goScraper boring internally and powerful externally.**
 

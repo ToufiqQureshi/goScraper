@@ -66,6 +66,77 @@ type errorString string
 
 func (e errorString) Error() string { return string(e) }
 
+func TestScraperReplacesACrashedBrowser(t *testing.T) {
+	requireChrome(t)
+
+	ctx := context.Background()
+	s, err := New(ctx, Config{Browsers: 1, PagesPerBrowser: 1})
+	if err != nil {
+		t.Fatalf("New returned an error: %v", err)
+	}
+	defer s.Close()
+
+	if err := s.Get(ctx, "https://example.com", func(*Page) error { return nil }); err != nil {
+		t.Fatalf("first Get returned an error: %v", err)
+	}
+
+	// Kill the whole Chrome process behind this slot, not just a tab.
+	dead, _, err := s.slots[0].current()
+	if err != nil {
+		t.Fatalf("current returned an error: %v", err)
+	}
+	dead.Close()
+
+	// The next request must still succeed: the slot rebuilds itself.
+	var title string
+	err = s.Get(ctx, "https://example.com", func(p *Page) error {
+		var err error
+		title, err = p.Title()
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Get after a browser crash should recover, got: %v", err)
+	}
+	if title == "" {
+		t.Fatal("expected a working page after the browser was replaced")
+	}
+
+	alive, _, err := s.slots[0].current()
+	if err != nil {
+		t.Fatalf("current returned an error: %v", err)
+	}
+	if alive == dead {
+		t.Fatal("the crashed browser should have been replaced, not reused")
+	}
+	if !alive.Healthy(ctx) {
+		t.Fatal("the replacement browser should be healthy")
+	}
+}
+
+func TestScraperKeepsWorkingAfterRepeatedBrowserCrashes(t *testing.T) {
+	requireChrome(t)
+
+	ctx := context.Background()
+	s, err := New(ctx, Config{Browsers: 1, PagesPerBrowser: 1})
+	if err != nil {
+		t.Fatalf("New returned an error: %v", err)
+	}
+	defer s.Close()
+
+	// A crash loop must not degrade into a permanently broken slot.
+	for i := 0; i < 3; i++ {
+		dead, _, err := s.slots[0].current()
+		if err != nil {
+			t.Fatalf("current returned an error: %v", err)
+		}
+		dead.Close()
+
+		if err := s.Get(ctx, "https://example.com", func(*Page) error { return nil }); err != nil {
+			t.Fatalf("Get after crash %d returned an error: %v", i+1, err)
+		}
+	}
+}
+
 func TestScraperHandlesConcurrentGetsAcrossBrowsers(t *testing.T) {
 	requireChrome(t)
 

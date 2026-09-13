@@ -90,6 +90,28 @@ func (b *Browser) Healthy(ctx context.Context) bool {
 	return b.run(ctx, chromedp.Evaluate("1", &result)) == nil
 }
 
+// PID returns the operating-system process ID of this browser's
+// Chrome process, or 0 if it isn't known. Useful for collecting
+// per-process memory/CPU metrics in production, and for verifying
+// that Close really did clean the process up.
+func (b *Browser) PID() int {
+	if b.ctx == nil || b.ctx.Err() != nil {
+		return 0
+	}
+
+	c := chromedp.FromContext(b.ctx)
+	if c == nil || c.Browser == nil {
+		return 0
+	}
+
+	process := c.Browser.Process()
+	if process == nil {
+		return 0
+	}
+
+	return process.Pid
+}
+
 // Close shuts down Chromium and releases all resources.
 func (b *Browser) Close() {
 	if b.cancel != nil {

@@ -3,6 +3,7 @@ package browserpool
 import (
 	"context"
 	"testing"
+	"time"
 
 	scraper "github.com/ToufiqQureshi/Scraper"
 )
@@ -18,6 +19,69 @@ func requireChrome(t *testing.T) *scraper.Browser {
 		t.Skipf("skipping: no Chrome available to launch: %v", err)
 	}
 	return b
+}
+
+func TestOptionsRecycleAfterIsRespected(t *testing.T) {
+	probe := requireChrome(t)
+	probe.Close()
+
+	// A short RecycleAfter must actually reach the pool: a browser
+	// idle past it is replaced even though it is perfectly healthy.
+	pool, err := New(context.Background(), 1, Options{RecycleAfter: 50 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("New returned an error: %v", err)
+	}
+	defer pool.Close()
+
+	first, err := pool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	pool.Release(first)
+
+	time.Sleep(100 * time.Millisecond)
+
+	second, err := pool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	defer pool.Release(second)
+
+	if second == first {
+		t.Fatal("a browser idle past RecycleAfter should have been replaced")
+	}
+	if got := pool.Stats().Recycled; got != 1 {
+		t.Fatalf("expected 1 recycled browser, got %d", got)
+	}
+}
+
+func TestDefaultOptionsDoNotRecycleImmediately(t *testing.T) {
+	probe := requireChrome(t)
+	probe.Close()
+
+	// With defaults, a browser handed straight back must be reused,
+	// not thrown away - the zero Options must not mean "recycle now".
+	pool, err := New(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("New returned an error: %v", err)
+	}
+	defer pool.Close()
+
+	first, err := pool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	pool.Release(first)
+
+	second, err := pool.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	defer pool.Release(second)
+
+	if second != first {
+		t.Fatal("with default options the same browser should be reused")
+	}
 }
 
 func TestPoolReplacesACrashedBrowser(t *testing.T) {

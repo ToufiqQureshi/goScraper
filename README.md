@@ -122,13 +122,20 @@ scraper.Browser / scraper.Page (headless Chromium via chromedp)
 (race-safe close, idle recycling, crash detection) through a small
 internal generic pool, so it only needs to be correct in one place.
 
-## Known limitation
+## Crash handling
 
-If an entire Chrome *process* crashes (not just one tab), `goscraper`
-does not yet replace that browser — its tab pool will return errors
-for that one slot until the process is restarted. A crashed *tab* is
-recovered automatically, which is the far more common case. See
-`docs/ROADMAP.md`.
+Both levels recover on their own:
+
+- A crashed **tab** is detected on checkout and replaced with a fresh
+  one.
+- A crashed **Chrome process** is detected by asking the browser
+  itself whether it is still alive (so a single bad URL is never
+  mistaken for a dead browser), then that browser and its whole tab
+  pool are rebuilt and the request is retried once.
+
+`Browser.PID()` exposes the underlying Chrome process ID for
+per-process monitoring, and `Close` is verified by test to leave no
+running or zombie process behind.
 
 ## Roadmap
 

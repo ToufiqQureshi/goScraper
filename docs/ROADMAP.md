@@ -43,12 +43,16 @@ not what this project is for.
       fixed internal constants.
 - [x] **Unified simple API (`goscraper`)** — wires `browserpool` +
       `pagepool` together behind one `Get(ctx, url, func(page))` call,
-      matching the "few lines of code" goal. **Known gap:** it does
-      not yet replace a browser whose whole Chrome *process* has died
-      (only a crashed *tab*, the common case, recovers automatically).
-      A dead process leaves its one pool slot returning errors until
-      restarted. Fixing this needs the (browser, pagepool) pair to be
-      rebuildable as a unit — worth doing before this ships as 1.0.
+      matching the "few lines of code" goal.
+- [x] **Whole-browser crash recovery** — if a Chrome *process* dies,
+      that slot's browser and its entire tab pool are rebuilt and the
+      request is retried once. A failure is only blamed on the browser
+      after asking the browser itself whether it is still alive, so a
+      single bad URL never triggers a needless restart.
+- [x] **Process cleanup verified** — `Browser.PID()` exposes the
+      Chrome process ID, and a test asserts `Close` leaves no running
+      or zombie process behind (the failure mode that turns a day-long
+      crawl into thousands of dead processes).
 
 ---
 

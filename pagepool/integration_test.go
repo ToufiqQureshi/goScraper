@@ -3,6 +3,7 @@ package pagepool
 import (
 	"context"
 	"testing"
+	"time"
 
 	scraper "github.com/ToufiqQureshi/Scraper"
 )
@@ -52,6 +53,42 @@ func TestPoolReusesTheSameTabAcrossPages(t *testing.T) {
 
 	if first != second {
 		t.Fatal("Get should hand back the same tab instead of opening a new one")
+	}
+}
+
+func TestOptionsRecycleAfterIsRespected(t *testing.T) {
+	browser := requireChrome(t)
+	defer browser.Close()
+
+	ctx := context.Background()
+
+	// A short RecycleAfter must actually reach the pool: a tab idle
+	// past it is replaced even though it is perfectly healthy.
+	pool, err := New(ctx, browser, 1, Options{RecycleAfter: 50 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("New returned an error: %v", err)
+	}
+	defer pool.Close()
+
+	first, err := pool.Get(ctx, "https://example.com")
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	pool.Release(first)
+
+	time.Sleep(100 * time.Millisecond)
+
+	second, err := pool.Get(ctx, "https://example.com")
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	defer pool.Release(second)
+
+	if second == first {
+		t.Fatal("a tab idle past RecycleAfter should have been replaced")
+	}
+	if got := pool.Stats().Recycled; got != 1 {
+		t.Fatalf("expected 1 recycled page, got %d", got)
 	}
 }
 
