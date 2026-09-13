@@ -157,12 +157,20 @@ func (p *Page) Navigate(ctx context.Context, url string) error {
 	return p.run(ctx, chromedp.Navigate(url))
 }
 
+// Alive reports whether this tab has been closed or has lost its
+// connection to Chrome. It costs nothing - no command is sent - so
+// callers can check it on every use, unlike Healthy.
+func (p *Page) Alive() bool {
+	return p.ctx != nil && p.ctx.Err() == nil
+}
+
 // Healthy reports whether the tab can still respond to commands,
 // bounded by ctx. A crashed browser or a killed tab fails this check,
 // so callers (like a pool) know to discard it instead of handing out
-// a dead page.
+// a dead page. It costs a round trip to Chrome, so prefer Alive where
+// that matters.
 func (p *Page) Healthy(ctx context.Context) bool {
-	if p.ctx == nil || p.ctx.Err() != nil {
+	if !p.Alive() {
 		return false
 	}
 

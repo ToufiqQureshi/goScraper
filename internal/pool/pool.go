@@ -24,8 +24,9 @@ var ErrInvalidSize = errors.New("pool size must be greater than 0")
 const DefaultRecycleAfter = 10 * time.Minute
 
 // DefaultSkipHealthCheckWithin avoids paying for a health check on an
-// item that was handed back this recently; a real failure still
-// surfaces immediately through the caller's own use of the item.
+// item that was handed back this recently. Only the expensive check is
+// skipped: the free one (alive) runs on every Get, so an item that has
+// already died is still never handed out.
 const DefaultSkipHealthCheckWithin = 2 * time.Second
 
 // Options tunes recycling behavior. A zero Options uses the defaults
@@ -73,20 +74,23 @@ type Pool[T any] struct {
 	recycleAfter          time.Duration
 	skipHealthCheckWithin time.Duration
 
-	// healthy and spawn take the caller's context so a Get(ctx) that
-	// ends up recycling an item still respects ctx's deadline instead
-	// of blocking on a health check or a fresh launch indefinitely.
+	// alive is the free check: no I/O, so Get runs it every time.
+	// healthy is the expensive one and is skipped for items used very
+	// recently. Both healthy and spawn take the caller's context so a
+	// Get(ctx) that ends up recycling still respects ctx's deadline
+	// instead of blocking on a check or a fresh launch indefinitely.
+	alive   func(T) bool
 	healthy func(context.Context, T) bool
 	spawn   func(context.Context) (T, error)
 	discard func(T)
 }
 
 // New creates a pool of `size` items, launching them in parallel with
-// spawn. healthy checks whether an item is still usable, and discard
-// releases an item's own resources (e.g. closing a browser). ctx
-// bounds the initial launch only. opts tunes recycling; its zero
-// value uses sensible defaults.
-func New[T any](ctx context.Context, size int, opts Options, healthy func(context.Context, T) bool, spawn func(context.Context) (T, error), discard func(T)) (*Pool[T], error) {
+// spawn. alive is a free check for an item that has already died;
+// healthy is the expensive one; discard releases an item's own
+// resources (e.g. closing a browser). ctx bounds the initial launch
+// only. opts tunes recycling; its zero value uses sensible defaults.
+func New[T any](ctx context.Context, size int, opts Options, alive func(T) bool, healthy func(context.Context, T) bool, spawn func(context.Context) (T, error), discard func(T)) (*Pool[T], error) {
 	if size <= 0 {
 		return nil, ErrInvalidSize
 	}
@@ -96,6 +100,7 @@ func New[T any](ctx context.Context, size int, opts Options, healthy func(contex
 		items:                 make(chan *entry[T], size),
 		recycleAfter:          opts.RecycleAfter,
 		skipHealthCheckWithin: opts.SkipHealthCheckWithin,
+		alive:                 alive,
 		healthy:               healthy,
 		spawn:                 spawn,
 		discard:               discard,
@@ -151,8 +156,14 @@ func (p *Pool[T]) Get(ctx context.Context) (T, error) {
 			return zero, ErrClosed
 		}
 
+		// Replace the item if it has sat idle too long, if it has
+		// already died (free to check, so always checked - an item
+		// that crashed while checked out must never be handed on),
+		// or if the deeper check says it is no longer healthy.
 		idle := time.Since(e.lastUsed)
-		if idle > p.recycleAfter || (idle > p.skipHealthCheckWithin && !p.healthy(ctx, e.value)) {
+		if idle > p.recycleAfter ||
+			!p.alive(e.value) ||
+			(idle > p.skipHealthCheckWithin && !p.healthy(ctx, e.value)) {
 			p.discard(e.value)
 			p.recycled.Add(1)
 			v, err := p.spawn(ctx)

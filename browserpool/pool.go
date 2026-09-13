@@ -52,6 +52,7 @@ func New(ctx context.Context, size int, opts ...Options) (*Pool, error) {
 		ctx,
 		size,
 		pool.Options{RecycleAfter: o.RecycleAfter, SkipHealthCheckWithin: o.SkipHealthCheckWithin},
+		func(b *browser.Browser) bool { return b.Alive() },
 		func(ctx context.Context, b *browser.Browser) bool { return b.Healthy(ctx) },
 		func(ctx context.Context) (*browser.Browser, error) { return browser.New(ctx, o.Browser) },
 		func(b *browser.Browser) { b.Close() },

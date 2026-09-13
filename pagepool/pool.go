@@ -64,6 +64,7 @@ func New(ctx context.Context, b *browser.Browser, size int, opts ...Options) (*P
 		ctx,
 		size,
 		pool.Options(o),
+		func(p *browser.Page) bool { return p.Alive() },
 		func(ctx context.Context, p *browser.Page) bool { return p.Healthy(ctx) },
 		func(ctx context.Context) (*browser.Page, error) { return open(ctx, blank) },
 		func(p *browser.Page) { p.Close() },

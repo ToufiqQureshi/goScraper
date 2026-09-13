@@ -143,12 +143,23 @@ func (b *Browser) Open(ctx context.Context, url string) (*Page, error) {
 	return page, nil
 }
 
+// Alive reports whether this browser has been closed or has lost its
+// connection to Chrome. It costs nothing - no command is sent - so
+// callers can check it on every use, unlike Healthy.
+//
+// It cannot catch a browser that is wedged but still connected; that
+// is what Healthy is for.
+func (b *Browser) Alive() bool {
+	return b.ctx != nil && b.ctx.Err() == nil
+}
+
 // Healthy reports whether the browser can still respond to commands,
 // bounded by ctx. A crashed or killed Chrome process fails this
 // check, so callers (like a pool) know to discard it instead of
-// handing out a dead browser.
+// handing out a dead browser. It costs a round trip to Chrome, so
+// prefer Alive where that matters.
 func (b *Browser) Healthy(ctx context.Context) bool {
-	if b.ctx == nil || b.ctx.Err() != nil {
+	if !b.Alive() {
 		return false
 	}
 

@@ -25,6 +25,7 @@ func newTestPool(t *testing.T, size int) *Pool[*item] {
 		context.Background(),
 		size,
 		Options{},
+		func(*item) bool { return true },
 		func(context.Context, *item) bool { return true },
 		func(context.Context) (*item, error) {
 			return &item{id: int(next.Add(1))}, nil
@@ -39,13 +40,14 @@ func newTestPool(t *testing.T, size int) *Pool[*item] {
 
 func TestNewRejectsInvalidSize(t *testing.T) {
 	spawn := func(context.Context) (*item, error) { return &item{}, nil }
+	alive := func(*item) bool { return true }
 	healthy := func(context.Context, *item) bool { return true }
 	discard := func(*item) {}
 
-	if _, err := New(context.Background(), 0, Options{}, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
+	if _, err := New(context.Background(), 0, Options{}, alive, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
 		t.Fatalf("New(0) should return ErrInvalidSize, got: %v", err)
 	}
-	if _, err := New(context.Background(), -1, Options{}, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
+	if _, err := New(context.Background(), -1, Options{}, alive, healthy, spawn, discard); !errors.Is(err, ErrInvalidSize) {
 		t.Fatalf("New(-1) should return ErrInvalidSize, got: %v", err)
 	}
 }
@@ -55,6 +57,7 @@ func TestNewReturnsSpawnErrorAndCleansUp(t *testing.T) {
 	spawnErr := errors.New("boom")
 
 	_, err := New(context.Background(), 3, Options{},
+		func(*item) bool { return true },
 		func(context.Context, *item) bool { return true },
 		func(context.Context) (*item, error) {
 			n := created.Add(1)
@@ -225,6 +228,7 @@ func TestGetRecyclesUnhealthyItem(t *testing.T) {
 		items:                 make(chan *entry[*item], 1),
 		recycleAfter:          DefaultRecycleAfter,
 		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		alive:                 func(*item) bool { return true },
 		healthy:               func(context.Context, *item) bool { return false },
 		spawn:                 func(context.Context) (*item, error) { return spawned, nil },
 		discard:               func(i *item) { i.closed = true },
@@ -256,6 +260,7 @@ func TestGetRecyclesItemIdleTooLong(t *testing.T) {
 		items:                 make(chan *entry[*item], 1),
 		recycleAfter:          DefaultRecycleAfter,
 		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		alive:                 func(*item) bool { return true },
 		healthy:               func(context.Context, *item) bool { return true }, // healthy, but too old
 		spawn:                 func(context.Context) (*item, error) { return spawned, nil },
 		discard:               func(i *item) { i.closed = true },
@@ -273,6 +278,42 @@ func TestGetRecyclesItemIdleTooLong(t *testing.T) {
 	}
 }
 
+// TestGetReplacesDeadItemEvenIfUsedRecently is the regression test for
+// a bug a real browser caught in CI: an item that died while it was
+// checked out, then was handed straight back, got served to the next
+// caller - because the expensive health check is skipped inside the
+// recent-use window. The free alive check now runs on every Get, so
+// "a crashed browser is never handed out" is actually true.
+func TestGetReplacesDeadItemEvenIfUsedRecently(t *testing.T) {
+	dead := &item{id: 1, closed: true} // died while checked out
+	spawned := &item{id: 2}
+
+	p := &Pool[*item]{
+		items:                 make(chan *entry[*item], 1),
+		recycleAfter:          DefaultRecycleAfter,
+		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		alive:                 func(i *item) bool { return !i.closed },
+		healthy: func(context.Context, *item) bool {
+			t.Error("the expensive check should not be needed: alive already answered")
+			return true
+		},
+		spawn:   func(context.Context) (*item, error) { return spawned, nil },
+		discard: func(i *item) { i.closed = true },
+	}
+	// Released a moment ago, so well inside the skip window.
+	p.items <- &entry[*item]{value: dead, lastUsed: time.Now()}
+
+	v, err := p.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get returned an error: %v", err)
+	}
+	defer p.Close()
+
+	if v != spawned {
+		t.Fatal("Get should never hand out an item that has already died")
+	}
+}
+
 func TestGetSkipsHealthCheckForRecentlyUsedItem(t *testing.T) {
 	recent := &item{id: 1}
 
@@ -280,6 +321,7 @@ func TestGetSkipsHealthCheckForRecentlyUsedItem(t *testing.T) {
 		items:                 make(chan *entry[*item], 1),
 		recycleAfter:          DefaultRecycleAfter,
 		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		alive:                 func(*item) bool { return true },
 		healthy:               func(context.Context, *item) bool { return false }, // would fail if checked
 		spawn:                 func(context.Context) (*item, error) { return &item{id: 2}, nil },
 		discard:               func(i *item) { i.closed = true },
@@ -305,6 +347,7 @@ func TestGetRecycleRespectsContextCancellation(t *testing.T) {
 		items:                 make(chan *entry[*item], 1),
 		recycleAfter:          DefaultRecycleAfter,
 		skipHealthCheckWithin: DefaultSkipHealthCheckWithin,
+		alive:                 func(*item) bool { return true },
 		healthy:               func(context.Context, *item) bool { return false },
 		spawn: func(ctx context.Context) (*item, error) {
 			select {

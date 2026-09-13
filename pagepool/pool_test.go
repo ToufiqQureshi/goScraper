@@ -23,6 +23,7 @@ func newTestPool(t *testing.T, size int) *Pool {
 		context.Background(),
 		size,
 		pool.Options{},
+		func(*browser.Page) bool { return true },
 		func(context.Context, *browser.Page) bool { return true },
 		func(context.Context) (*browser.Page, error) { return &browser.Page{}, nil },
 		func(*browser.Page) {},
