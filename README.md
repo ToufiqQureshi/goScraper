@@ -120,6 +120,11 @@ browserpool + pagepool (reuse, crash recovery, stats)
      Website
 ```
 
+An interactive version of this picture — with the request path, trust
+boundaries, and links into the real source files — is at
+[docs/diagrams/goscraper-architecture.html](docs/diagrams/goscraper-architecture.html)
+(open it in a browser; its source spec sits beside it).
+
 Where everything lives:
 
 ```text
