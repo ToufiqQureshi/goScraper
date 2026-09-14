@@ -1,45 +1,20 @@
 # CLAUDE.md — goScraper Development Rules
 
+This file is engineering rules only: coding standards, workflow, and
+production-safety rules — **how** we work. For **what** we are
+building (features, priorities, status), see `docs/ROADMAP.md`.
+
 ## 1. Project Goal
 
 goScraper is a **simple, fast, production-grade Go scraping library**.
+Our goal is NOT to create the biggest scraping library — it's to fill
+real gaps in existing Go scraping tools (Colly, goquery, chromedp, Rod,
+Playwright Go, Selenium Go, and others). See `docs/ROADMAP.md` for the
+product direction, priorities, and what's already built.
 
-Our goal is NOT to create the biggest scraping library.
-
-Our goal is to build a library that fills the important gaps found in current Go scraping tools such as:
-
-- Colly
-- goquery
-- chromedp
-- Rod
-- Playwright Go
-- Selenium Go
-- other actively maintained Go scraping libraries
-
-Before deciding that something is a real gap, verify it using current documentation, source code, GitHub issues/discussions, and developer feedback.
-
-### Main product direction
-
-> **Fast HTTP scraping by default, with automatic JS/browser rendering only when needed.**
-
-The main areas we want to be better at are:
-
-1. Hybrid HTTP + JS rendering
-2. Efficient browser/page pooling
-3. Low memory usage
-4. Long-running crawler stability
-5. Smart page readiness
-6. Concurrency and backpressure
-7. Network/API response extraction
-8. Resource blocking and performance control
-9. Crash recovery and browser recycling
-10. Simple developer experience
-11. Production observability
-12. Clean and understandable architecture
-
-Do not add a feature just because another library has it.
-
-Every feature must solve a real problem.
+Do not add a feature just because another library has it. Every
+feature must solve a real problem (see Section 20, Gap-Driven
+Development).
 
 ---
 
@@ -100,7 +75,9 @@ Before adding code, ask:
 
 > "Can this be simpler?"
 
-If yes, use the simpler solution.
+If yes, use the simpler solution. Do not build a complex pool,
+cache, or queue if a simpler implementation works — measure before
+optimizing.
 
 ---
 
@@ -466,216 +443,33 @@ If a feature does not provide a measurable or clear benefit, question whether it
 
 ---
 
-# 15. Hybrid Scraping Is the Core Feature
+# 15. Production Safety Rules
 
-The preferred flow is:
+These are universal safety rules that apply to every feature,
+regardless of what it is. (For what to build, see `docs/ROADMAP.md`.)
 
-```text
-URL
- ↓
-HTTP
- ↓
-Is JS needed?
- ├── No → parse
- └── Yes → browser
-```
-
-Do not launch Chromium unnecessarily.
-
-This should be one of the main advantages of goScraper.
-
-The user should be able to choose:
-
-```text
-http
-browser
-auto
-```
-
-`auto` should be the easiest/default mode where practical.
+- **Concurrency**: never create unlimited goroutines, browser pages,
+  or queue entries. Every worker pool, queue, and cache needs a
+  bounded size.
+- **Waiting**: do not rely on `sleep(fixed duration)` as the primary
+  readiness strategy. Prefer explicit readiness checks (selector
+  appears/disappears, condition met, timeout as a backstop).
+- **Retries**: retries must be deliberate — limited, backed off, and
+  aware of *which* errors deserve a retry. Do not retry every failure.
+- **Memory**: do not optimize memory based on theory alone — benchmark
+  it. The project must stay stable across hours/days of crawling, not
+  just a quick script run.
+- **Observability**: keep metrics optional and lightweight. Do not
+  force a monitoring framework on every user.
+- **Resource controls** (blocking images/fonts/etc., rate limits, and
+  similar knobs): make them configurable. Do not hardcode aggressive
+  defaults that could unexpectedly break pages.
+- **Cancellation**: every blocking call must accept and honor a
+  `context.Context`.
 
 ---
 
-# 16. Browser Pool
-
-The browser system should focus on production stability.
-
-Important capabilities:
-
-- reuse browsers
-- reuse pages
-- limit browser count
-- limit page count
-- recycle unhealthy browsers
-- recover from crashes
-- clean up idle resources
-- support cancellation
-- avoid memory growth where possible
-
-Do not create a complex pool if a simpler implementation works.
-
-Measure the implementation before optimizing it.
-
----
-
-# 17. Smart Waiting
-
-Do not rely on:
-
-```go
-sleep(5 * time.Second)
-```
-
-as the main strategy.
-
-Support simple readiness conditions such as:
-
-```text
-selector exists
-selector disappears
-DOM becomes stable
-network becomes quiet
-document ready
-custom JS condition
-timeout
-```
-
-The API must remain simple.
-
----
-
-# 18. Resource Blocking
-
-Allow users to reduce browser overhead.
-
-Potential resources:
-
-```text
-images
-fonts
-video
-audio
-tracking
-analytics
-ads
-custom URL patterns
-```
-
-Make this configurable.
-
-Do not hardcode aggressive blocking that could unexpectedly break pages.
-
----
-
-# 19. Network/API Extraction
-
-Modern sites often load useful data through APIs.
-
-Make it simple to inspect:
-
-```text
-requests
-responses
-JSON
-XHR
-fetch
-```
-
-Users should not need deep browser protocol knowledge for common tasks.
-
-Keep low-level access available for advanced users, but do not make it the default API.
-
----
-
-# 20. Concurrency
-
-Go's concurrency is a major reason to use goScraper.
-
-Use:
-
-- bounded workers
-- global limits
-- per-host limits
-- browser limits
-- queue limits
-- cancellation
-- backpressure
-
-Never create unlimited goroutines or browser pages.
-
----
-
-# 21. Retry
-
-Retries should be deliberate.
-
-Use:
-
-- retry limits
-- backoff
-- jitter
-- context cancellation
-- error-aware retry decisions
-
-Do not retry every failure.
-
----
-
-# 22. Memory
-
-Memory usage is a first-class concern.
-
-The project should be designed for:
-
-```text
-hours of crawling
-days of crawling
-large URL lists
-high concurrency
-browser rendering
-```
-
-Track and test:
-
-- browser reuse
-- page reuse
-- cleanup
-- queue growth
-- memory growth
-- crash recovery
-
-Do not optimize memory based only on theory. Benchmark it.
-
----
-
-# 23. Observability
-
-Production users should be able to understand what the scraper is doing.
-
-Useful metrics:
-
-```text
-requests
-success
-errors
-retries
-renders
-render time
-browser count
-page count
-queue size
-cache hits
-cache misses
-crashes
-```
-
-Keep metrics optional and lightweight.
-
-Do not force a large monitoring framework on every user.
-
----
-
-# 24. Error Messages
+# 16. Error Messages
 
 Errors should be useful but simple.
 
@@ -693,7 +487,7 @@ Avoid giant custom error systems for simple failures.
 
 ---
 
-# 25. Documentation
+# 17. Documentation
 
 Every major feature needs documentation.
 
@@ -712,7 +506,7 @@ Documentation should be beginner-friendly.
 
 ---
 
-# 26. Examples
+# 18. Examples
 
 Examples should be simple enough for a junior developer to copy and understand.
 
@@ -732,7 +526,7 @@ Every important feature should have a small example when practical.
 
 ---
 
-# 27. API Design
+# 19. API Design
 
 The public API should feel obvious.
 
@@ -759,11 +553,15 @@ If a beginner can understand the API immediately, that is a success.
 
 ---
 
-# 28. Gap-Driven Development
+# 20. Gap-Driven Development
 
 The project must always ask:
 
 > **What real problem are we solving that existing Go scraping libraries don't solve well?**
+
+Before deciding something is a real gap, verify it using current
+documentation, source code, GitHub issues/discussions, and developer
+feedback — do not assume.
 
 Before implementing a major feature, document:
 
@@ -777,27 +575,13 @@ Expected benefit:
 Test plan:
 ```
 
-Do not build features just to increase the feature count.
+Do not build features just to increase the feature count. See
+`docs/ROADMAP.md` for the project's competitive position and how
+priorities are ordered.
 
 ---
 
-# 29. Competitive Position
-
-The target is not:
-
-> "goScraper has more features."
-
-The target is:
-
-> **"goScraper is easier to use, faster for normal scraping, efficient when JS rendering is needed, and more reliable for long-running production crawls."**
-
-Focus on the combination of:
-
-**simplicity + performance + JS support + memory efficiency + reliability.**
-
----
-
-# 30. Security Boundary
+# 21. Security Boundary
 
 Do not build features whose primary purpose is:
 
@@ -811,7 +595,7 @@ The goal is a strong, reliable scraping/rendering engine.
 
 ---
 
-# 31. Before Every Coding Task
+# 22. Before Every Coding Task
 
 Follow this checklist:
 
@@ -838,7 +622,7 @@ Follow this checklist:
 
 ---
 
-# 32. Solo Maintainer Mandate — Ship Production-Grade Only
+# 23. Solo Maintainer Mandate — Ship Production-Grade Only
 
 goScraper has **one maintainer**. There is no team to catch a half-done feature later, no one else who will come back and "harden it eventually."
 
@@ -891,7 +675,7 @@ Raise these proactively, the same way Section 13 requires raising dead code — 
 
 ---
 
-# 33. Self-Report Gaps Without Being Asked
+# 24. Self-Report Gaps Without Being Asked
 
 The project owner is not a Go developer and cannot audit this code
 themselves. They are trusting the implementation completely. That
@@ -913,9 +697,9 @@ finished. Silence about a known weakness is the same as hiding it.
 
 ---
 
-# 34. Fix It, Don't Just Report It
+# 25. Fix It, Don't Just Report It
 
-Reporting a gap is not the same as handling it. Section 33 exists so
+Reporting a gap is not the same as handling it. Section 24 exists so
 nothing stays hidden — **not** so known problems can be listed and
 left in the code.
 
@@ -931,7 +715,7 @@ The rule is simple:
 - It depends on something unavailable right now (a missing
   credential, an environment that can't run it, an upstream bug).
 - It is a large feature of its own, already on the roadmap, and
-  fixing it now would mean shipping it half-done — which Section 32
+  fixing it now would mean shipping it half-done — which Section 23
   forbids.
 
 Everything else gets fixed now. Specifically, these are **never**
@@ -954,7 +738,7 @@ disclosure they have to act on themselves defeats the point.
 
 ---
 
-# 35. Final Rule
+# 26. Final Rule
 
 **Keep goScraper boring internally and powerful externally.**
 

@@ -4,13 +4,44 @@ This is a plain-English list of what's built, what's next, and what would
 make goScraper the best production Go scraping library on the market.
 
 Not a wishlist. Every item here solves a real problem existing Go
-scraping libraries (Colly, chromedp, Rod, Playwright Go, Selenium Go)
-handle badly or not at all. See `CLAUDE.md` for the rules every item
-must follow before it counts as done.
+scraping libraries (Colly, goquery, chromedp, Rod, Playwright Go,
+Selenium Go, and others) handle badly or not at all. See `CLAUDE.md`
+for the engineering rules every item must follow before it counts as
+done.
+
+**Competitive position.** The target is not "goScraper has more
+features." The target is: **goScraper is easier to use, faster for
+normal scraping, efficient when JS rendering is needed, and more
+reliable for long-running production crawls.** That means focusing on
+the combination of simplicity + performance + JS support + memory
+efficiency + reliability — not feature count.
 
 **Out of scope, on purpose:** anything whose main job is defeating
 CAPTCHAs, bypassing logins, or making automation "undetectable." That's
 not what this project is for.
+
+---
+
+## Product direction: the hybrid engine
+
+> **Fast HTTP scraping by default, with automatic JS/browser rendering only when needed.**
+
+```text
+URL
+ ↓
+HTTP
+ ↓
+Is JS needed?
+ ├── No → parse
+ └── Yes → browser
+```
+
+Do not launch Chromium unnecessarily — this is meant to be one of
+goScraper's main advantages over libraries that are HTTP-only or
+browser-only. The user picks the mode (`http`, `browser`, or `auto`);
+`auto` tries HTTP first and only escalates to the browser pool when a
+heuristic says the page needs it (see P0 items 2–4 below). `auto`
+should be the easiest/default mode where practical.
 
 ---
 
@@ -65,6 +96,8 @@ not what this project is for.
       sets `GOSCRAPER_REQUIRE_CHROME=1`, which turns a failed launch
       into a failed build instead of a silent skip. CI also checks
       gofmt and vet, and runs tests under `-race`.
+- [x] **Architecture diagram** — an interactive, source-linked diagram
+      of the runtime (`docs/diagrams/goscraper-architecture.html`).
 
 ---
 
@@ -91,7 +124,8 @@ not what this project is for.
       pooled browser fallback) is the actual product pitch.
 - [ ] **5. Resource blocking** — let users block images/fonts/video/ads
       before they download, so a rendered page costs far less bandwidth,
-      memory, and time.
+      memory, and time. Make it configurable per-user; do not hardcode
+      aggressive defaults that could unexpectedly break pages.
 - [ ] **6. Retry system** — retries with backoff, jitter, a max count,
       and rules for which errors deserve a retry. No blind retry-everything.
 - [ ] **7. Concurrency limits** — a global cap and a per-domain cap, so
@@ -99,11 +133,14 @@ not what this project is for.
 
 ## P1 — makes goScraper meaningfully better
 
-- [ ] **8. Smart waiting** — wait for "selector appears," "network goes
-      quiet," or a custom JS condition, instead of `sleep(5 * time.Second)`.
+- [ ] **8. Smart waiting** — wait for "selector appears," "selector
+      disappears," "network goes quiet," `document.readyState`, or a
+      custom JS condition, instead of `sleep(5 * time.Second)`. The API
+      must stay simple even with multiple conditions composed together.
 - [ ] **9. Network/API capture** — a simple callback for reading a
       page's own XHR/fetch responses (many sites load their real data
-      through an API, not the HTML).
+      through an API, not the HTML). Keep low-level CDP access available
+      for advanced users, but don't make it the default API.
 - [ ] **10. Crawl queue** — a proper URL queue with priority, depth, and
       a bounded size, instead of a plain loop over a slice.
 - [ ] **11. URL dedupe** — skip a URL (and its equivalent variants)
@@ -116,8 +153,9 @@ not what this project is for.
 - [ ] **14. Per-domain settings** — different concurrency, delay, and
       retry rules per domain, e.g. `example.com = 10 workers`.
 - [ ] **15. Real metrics** — expand today's basic counters into
-      request/render rates, latency, cache hit rate, queue depth —
-      still optional and dependency-free.
+      request/render rates, latency, cache hit rate, queue depth,
+      browser/page counts, and crash counts — still optional and
+      dependency-free.
 - [ ] **16. Long-running soak tests** — an actual multi-hour local test
       that proves memory stays flat, not just a fast proxy test.
 - [ ] **17. Benchmarks** — HTTP-only vs. browser-only vs. hybrid, with
@@ -138,5 +176,5 @@ not what this project is for.
 ## How to read this list
 
 Work top to bottom. A P0 item is only "done" when it meets the bar in
-`CLAUDE.md` Section 32 — tested against real failure cases, not just
-the happy path — before moving to the next one.
+`CLAUDE.md` Section 23 (Solo Maintainer Mandate) — tested against real
+failure cases, not just the happy path — before moving to the next one.
