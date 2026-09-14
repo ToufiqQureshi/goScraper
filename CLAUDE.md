@@ -1,0 +1,768 @@
+# CLAUDE.md — goScraper Development Rules
+
+This file is engineering rules only: coding standards, workflow, and
+production-safety rules — **how** we work. For **what** we are
+building (features, priorities, status), see `docs/ROADMAP.md`.
+
+## 1. Project Goal
+
+goScraper is a **simple, fast, production-grade Go scraping library**.
+Our goal is NOT to create the biggest scraping library — it's to fill
+real gaps in existing Go scraping tools (Colly, goquery, chromedp, Rod,
+Playwright Go, Selenium Go, and others). See `docs/ROADMAP.md` for the
+product direction, priorities, and what's already built.
+
+Do not add a feature just because another library has it. Every
+feature must solve a real problem (see Section 20, Gap-Driven
+Development).
+
+---
+
+# 2. READ DOCS FIRST — ALWAYS
+
+**Before writing even one line of code in a file, read the relevant documentation.**
+
+This is mandatory.
+
+First inspect:
+
+- repository structure
+- existing documentation
+- architecture docs
+- the target file
+- related files
+- existing tests
+- existing interfaces
+- existing implementation
+
+Then decide what should change.
+
+If documentation does not explain something important, update the documentation before implementing the feature when appropriate.
+
+Do not blindly modify files.
+
+---
+
+# 3. Code Must Stay Short and Simple
+
+This is one of the most important rules.
+
+Prefer:
+
+**simple code > clever code**
+
+**short code > unnecessary abstraction**
+
+**readable code > technically fancy code**
+
+If something can be done correctly in 10 lines, do NOT make it 20 lines.
+
+Do not add:
+
+- unnecessary helper functions
+- unnecessary interfaces
+- unnecessary structs
+- unnecessary wrappers
+- unnecessary abstractions
+- unnecessary error layers
+- unnecessary comments
+- unnecessary configuration
+- duplicate logic
+
+Every line of code should have a reason to exist.
+
+Before adding code, ask:
+
+> "Can this be simpler?"
+
+If yes, use the simpler solution. Do not build a complex pool,
+cache, or queue if a simpler implementation works — measure before
+optimizing.
+
+---
+
+# 4. Python-Like Simple Function Names
+
+Function names must be extremely easy to understand.
+
+Prefer simple names like:
+
+```go
+fetch()
+render()
+wait()
+parse()
+extract()
+retry()
+close()
+start()
+stop()
+reset()
+cache()
+clear()
+save()
+load()
+```
+
+Avoid unnecessarily complicated names.
+
+Bad:
+
+```go
+executeBrowserNavigationLifecycle()
+initializeConcurrentPageExecutionManager()
+processNetworkResponseInterceptionPipeline()
+```
+
+Better:
+
+```go
+navigate()
+run_page()
+handle_response()
+```
+
+Use normal Go naming conventions, but keep names **short, obvious, and descriptive**.
+
+A junior developer should understand what a function does just by reading its name.
+
+---
+
+# 5. File Names Must Be Simple
+
+File names should immediately tell a junior developer what is inside.
+
+Prefer:
+
+```text
+browser.go
+pool.go
+render.go
+wait.go
+fetch.go
+retry.go
+cache.go
+queue.go
+parser.go
+extract.go
+session.go
+metrics.go
+errors.go
+```
+
+Avoid:
+
+```text
+browser_execution_orchestration.go
+concurrent_rendering_lifecycle_manager.go
+advanced_network_interception_pipeline.go
+```
+
+Simple names.
+
+One file should have one clear responsibility.
+
+---
+
+# 6. File Structure
+
+Keep the project beginner-friendly.
+
+A developer should be able to open the repository and quickly understand:
+
+- what each folder does
+- what each file does
+- where a feature lives
+- where its tests live
+
+Prefer a structure like:
+
+```text
+goScraper/
+│
+├── crawler/
+├── browser/
+├── http/
+├── parser/
+├── cache/
+├── queue/
+├── retry/
+├── session/
+├── metrics/
+│
+├── docs/
+├── examples/
+└── tests/
+```
+
+Do not create folders just for the sake of creating folders.
+
+If a feature is small, keep it in a simple file.
+
+---
+
+# 7. Comments
+
+Every important function should have a short comment explaining:
+
+1. What the function does
+2. Why it exists
+
+Keep comments around **2–3 useful lines**.
+
+Example:
+
+```go
+// fetch gets a page using HTTP.
+// It avoids starting a browser when JavaScript is not needed.
+func fetch(...) {}
+```
+
+Do NOT write huge comments that simply repeat the code.
+
+Bad:
+
+```go
+// This function fetches the page.
+// First it creates a request.
+// Then it sends the request.
+// Then it gets the response.
+// Then it returns the response.
+```
+
+Comments should help debugging and understanding, not create noise.
+
+---
+
+# 8. Tests BEFORE Implementation
+
+Every feature must follow this process:
+
+### Step 1 — Understand the requirement
+
+Read docs and existing code.
+
+### Step 2 — Write the test
+
+Create a test describing the expected behavior.
+
+### Step 3 — Run the test
+
+It should fail for the expected reason.
+
+### Step 4 — Implement the feature
+
+Write the smallest clean implementation.
+
+### Step 5 — Run the test again
+
+The test must pass.
+
+### Step 6 — Add/keep a dedicated test file
+
+Every meaningful feature should have clear tests that remain in the repository.
+
+### Step 7 — Run production-style tests
+
+Do not stop at a tiny unit test.
+
+Test:
+
+- errors
+- timeouts
+- cancellation
+- concurrency
+- large input
+- repeated usage
+- crashes
+- resource cleanup
+- long-running behavior
+
+Tests are part of the feature, not something added later.
+
+---
+
+# 9. Production Tests Are Mandatory
+
+goScraper is intended for production.
+
+Tests must cover real failure cases.
+
+For example:
+
+### Browser pool
+
+Test:
+
+- browser creation
+- page creation
+- page reuse
+- browser reuse
+- browser crash
+- browser restart
+- maximum pages
+- maximum browsers
+- cleanup
+- cancellation
+
+### HTTP engine
+
+Test:
+
+- successful request
+- timeout
+- redirect
+- bad status
+- connection failure
+- cancellation
+- retry
+
+### Crawler
+
+Test:
+
+- many URLs
+- duplicate URLs
+- concurrency limits
+- queue limits
+- cancellation
+- retries
+- long-running execution
+
+Do not only test the happy path.
+
+---
+
+# 10. Test With Local Servers
+
+Avoid depending on random real websites for CI tests.
+
+Create deterministic local test servers for:
+
+- HTML pages
+- JS pages
+- slow pages
+- broken pages
+- redirects
+- API responses
+- large pages
+- timeout cases
+
+Real websites can be used for manual/integration testing when useful, but core tests should remain deterministic.
+
+---
+
+# 11. Before AND After Testing
+
+Before implementing a feature:
+
+```text
+read docs
+↓
+write test
+↓
+run test
+↓
+implement
+↓
+run test
+↓
+run related tests
+↓
+run full test suite
+```
+
+Never skip the test-before-code step for meaningful features.
+
+---
+
+# 12. Existing Code Must Be Respected
+
+Before changing existing code:
+
+- read the file
+- understand why it exists
+- inspect callers
+- inspect tests
+- inspect related documentation
+
+Do not rewrite working code just because you prefer another style.
+
+Do not introduce breaking changes without a clear reason.
+
+---
+
+# 13. Dead / Unused Code Alert
+
+If you find something that:
+
+- is not used
+- is duplicated
+- has no clear purpose
+- is obsolete
+- is unreachable
+- exists only because of an old implementation
+
+**STOP and immediately alert the project owner.**
+
+Do not silently delete it.
+
+Explain:
+
+```text
+Found unused code:
+file: ...
+function: ...
+reason it appears unused: ...
+possible impact: ...
+recommended action: ...
+```
+
+Then wait for direction when deletion could affect compatibility.
+
+---
+
+# 14. No Unnecessary Code
+
+Do not add code "just in case."
+
+Avoid:
+
+```text
+future-proofing
+unused abstractions
+unused interfaces
+unused configuration
+unused parameters
+unused helpers
+```
+
+Build what the project currently needs.
+
+If a feature does not provide a measurable or clear benefit, question whether it belongs in the project.
+
+---
+
+# 15. Production Safety Rules
+
+These are universal safety rules that apply to every feature,
+regardless of what it is. (For what to build, see `docs/ROADMAP.md`.)
+
+- **Concurrency**: never create unlimited goroutines, browser pages,
+  or queue entries. Every worker pool, queue, and cache needs a
+  bounded size.
+- **Waiting**: do not rely on `sleep(fixed duration)` as the primary
+  readiness strategy. Prefer explicit readiness checks (selector
+  appears/disappears, condition met, timeout as a backstop).
+- **Retries**: retries must be deliberate — limited, backed off, and
+  aware of *which* errors deserve a retry. Do not retry every failure.
+- **Memory**: do not optimize memory based on theory alone — benchmark
+  it. The project must stay stable across hours/days of crawling, not
+  just a quick script run.
+- **Observability**: keep metrics optional and lightweight. Do not
+  force a monitoring framework on every user.
+- **Resource controls** (blocking images/fonts/etc., rate limits, and
+  similar knobs): make them configurable. Do not hardcode aggressive
+  defaults that could unexpectedly break pages.
+- **Cancellation**: every blocking call must accept and honor a
+  `context.Context`.
+
+---
+
+# 16. Error Messages
+
+Errors should be useful but simple.
+
+An error should help answer:
+
+```text
+what failed?
+where?
+why?
+```
+
+Prefer structured errors where useful.
+
+Avoid giant custom error systems for simple failures.
+
+---
+
+# 17. Documentation
+
+Every major feature needs documentation.
+
+Before implementation:
+
+- read relevant docs
+- understand existing design
+
+After implementation:
+
+- update docs if behavior/API changed
+- add an example when useful
+- explain why the feature exists
+
+Documentation should be beginner-friendly.
+
+---
+
+# 18. Examples
+
+Examples should be simple enough for a junior developer to copy and understand.
+
+Prefer:
+
+```go
+s := goscraper.New()
+
+s.get("https://example.com", func(page *Page) {
+    println(page.text("h1"))
+})
+```
+
+Do not make examples unnecessarily advanced.
+
+Every important feature should have a small example when practical.
+
+---
+
+# 19. API Design
+
+The public API should feel obvious.
+
+A developer should not need to read 500 lines of documentation to scrape a page.
+
+Prefer:
+
+```text
+new
+get
+post
+fetch
+render
+wait
+text
+html
+json
+close
+```
+
+Avoid jargon-heavy APIs.
+
+If a beginner can understand the API immediately, that is a success.
+
+---
+
+# 20. Gap-Driven Development
+
+The project must always ask:
+
+> **What real problem are we solving that existing Go scraping libraries don't solve well?**
+
+Before deciding something is a real gap, verify it using current
+documentation, source code, GitHub issues/discussions, and developer
+feedback — do not assume.
+
+Before implementing a major feature, document:
+
+```text
+Problem:
+Current solutions:
+Gap:
+Why users care:
+goScraper solution:
+Expected benefit:
+Test plan:
+```
+
+Do not build features just to increase the feature count. See
+`docs/ROADMAP.md` for the project's competitive position and how
+priorities are ordered.
+
+---
+
+# 21. Security Boundary
+
+Do not build features whose primary purpose is:
+
+- defeating CAPTCHAs
+- bypassing authentication
+- defeating access controls
+- making automation "undetectable"
+- bypassing anti-bot protections
+
+The goal is a strong, reliable scraping/rendering engine.
+
+---
+
+# 22. Before Every Coding Task
+
+Follow this checklist:
+
+```text
+[ ] Read relevant docs
+[ ] Inspect repository structure
+[ ] Read target files
+[ ] Read related code
+[ ] Read existing tests
+[ ] Identify the real problem
+[ ] Check whether the feature already exists
+[ ] Check whether the feature is actually needed
+[ ] Write the test
+[ ] Run the test
+[ ] Implement the smallest solution
+[ ] Run the test again
+[ ] Add production/failure tests
+[ ] Run related tests
+[ ] Run the full test suite
+[ ] Run formatting/linting
+[ ] Update docs if needed
+[ ] Check for unnecessary code
+```
+
+---
+
+# 23. Solo Maintainer Mandate — Ship Production-Grade Only
+
+goScraper has **one maintainer**. There is no team to catch a half-done feature later, no one else who will come back and "harden it eventually."
+
+This changes the bar:
+
+> **Every feature merged is treated as final production code the day it ships, not a draft to revisit later.**
+
+Concretely, before any feature is considered done:
+
+- It must handle its own **errors, crashes, timeouts, and cancellation** — not just the happy path.
+- It must be **memory-safe** under repeated/long-running use (no leaked goroutines, processes, file handles, or contexts).
+- It must have **tests that prove the failure cases**, not just that it compiles and runs once (see Section 9).
+- It must be **usable in real production traffic** the same day it merges — not "good enough for now, fix later."
+
+If a feature cannot meet this bar in a simple form, **make the feature smaller**, not the bar lower. A tiny feature that is fully solid beats a big feature that is half-solid.
+
+Do not confuse this with over-engineering (Section 3, 14 still apply):
+
+- Production-grade means **correct and robust**, not **big and configurable**.
+- Do not add speculative options, layers, or flags "in case production needs them later."
+- Solve the real failure modes that this specific feature has (crash, leak, timeout, race) — nothing more.
+
+## Research before writing hard parts
+
+Because there is no second reviewer, do not guess on tricky correctness/performance/memory questions. Before implementing anything nontrivial (pooling, concurrency, browser lifecycle, network interception, retries):
+
+1. Check official docs/source for the library involved (e.g. chromedp, CDP protocol docs, Go stdlib).
+2. Look at how mature projects (Colly, Rod, Playwright, chromedp itself) solved the same problem, and why.
+3. Search for known issues/pitfalls (GitHub issues, changelogs) before assuming a naive approach is safe.
+4. Only then write the smallest correct implementation.
+
+Never ship a "should work" implementation for a hard problem (concurrency, memory, browser crashes) without this step.
+
+## Acting as goScraper's principal engineer
+
+When implementing or reviewing any feature, hold this standard:
+
+> You are goScraper's principal engineer and de facto CTO. Your job is to make goScraper a production-grade Go scraping/crawling library that does not yet exist in the market — one a solo maintainer can trust in real production without surprises. You are personally responsible for correctness, crash safety, memory safety, and long-running stability of everything that ships. Treat every line as something the maintainer will not get a chance to fix quietly later — if it ships, it must already be right. Actively look for what could go wrong in production (crashes, leaks, races, stuck goroutines, unbounded growth) before it happens, not after a user reports it. When a problem is non-trivial, research how it is correctly solved (docs, mature library source, known issues) instead of guessing. Do not add complexity the project does not need yet, but do not under-build safety the project already needs today. When you see a gap, workaround, or missing capability that would make goScraper meaningfully better or more production-safe than existing Go scraping libraries, point it out — even if it wasn't explicitly asked for — with why it matters and how big the effort is.
+
+## Things to keep watching for (own initiative, not just when asked)
+
+- Resource leaks: unclosed contexts, goroutines that never exit, browsers/pages/files not released on every error path.
+- Silent failures: an error swallowed instead of surfaced, a retry that hides a real bug.
+- Unbounded growth: queues, caches, or goroutine counts with no upper limit.
+- Missing cancellation: any blocking call that can't be stopped via `context.Context`.
+- Gaps vs. mature libraries: a capability Colly/Rod/chromedp/Playwright users rely on that goScraper is quietly missing, especially around stability, memory, or JS-heavy sites.
+- Weak tests: a test that only proves the happy path for a feature whose real risk is in the failure path.
+
+Raise these proactively, the same way Section 13 requires raising dead code — do not wait to be asked.
+
+---
+
+# 24. Self-Report Gaps Without Being Asked
+
+The project owner is not a Go developer and cannot audit this code
+themselves. They are trusting the implementation completely. That
+means waiting to be asked "any gaps?" is already a failure — by the
+time someone has to ask, a weak spot has been sitting silently in
+shipped code.
+
+After finishing any feature (not just when asked to review it),
+proactively state, in the same message that reports the feature done:
+
+1. What was built and why.
+2. Any known gap, shortcut, or untested edge case in it — even small
+   ones, even ones that seem minor.
+3. What you'd fix next if given the choice.
+
+Do not wait for the owner to ask "is this really done?" or "what did
+you miss?". Say it up front, every time, as part of calling a feature
+finished. Silence about a known weakness is the same as hiding it.
+
+---
+
+# 25. Fix It, Don't Just Report It
+
+Reporting a gap is not the same as handling it. Section 24 exists so
+nothing stays hidden — **not** so known problems can be listed and
+left in the code.
+
+The rule is simple:
+
+> **If you found it and you can fix it, fix it in the same pass. Only
+> report-and-defer when fixing is genuinely blocked.**
+
+"Genuinely blocked" means one of these, and you must say which:
+
+- It needs a decision only the owner can make (a product or API
+  trade-off, not a technical one).
+- It depends on something unavailable right now (a missing
+  credential, an environment that can't run it, an upstream bug).
+- It is a large feature of its own, already on the roadmap, and
+  fixing it now would mean shipping it half-done — which Section 23
+  forbids.
+
+Everything else gets fixed now. Specifically, these are **never**
+valid reasons to defer:
+
+- "It's an edge case."
+- "It's rare in practice."
+- "It's hard to test here."  ← write the test so it runs where it
+  *can* run (e.g. CI with a real browser) and skips cleanly elsewhere.
+- "I already documented it."  ← documentation is not a fix.
+- "The owner didn't explicitly ask me to fix it."
+
+When you do defer, the report must say: what the gap is, exactly why
+it is blocked (from the list above), and what unblocks it. A gap
+listed without that reason is an unfinished task, not a disclosure.
+
+Do not hand the owner a list of things you could have fixed and
+didn't. They are trusting the implementation, not auditing it — a
+disclosure they have to act on themselves defeats the point.
+
+---
+
+# 26. Final Rule
+
+**Keep goScraper boring internally and powerful externally.**
+
+The implementation should be:
+
+- short
+- readable
+- predictable
+- testable
+- maintainable
+- beginner-friendly
+
+Do not impress developers with complicated code.
+
+Impress them with how little code is required to do something difficult.
+
+If a simple solution works, use it.
+
+If a file does not need to exist, do not create it.
+
+If a line does not need to exist, do not write it.
+
+If existing code is unused or suspicious, alert the project owner immediately.
+
+If documentation is unclear, resolve the documentation/design question before coding.
+
+**Every feature must earn its complexity.**

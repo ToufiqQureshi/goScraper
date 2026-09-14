@@ -1,5 +1,14 @@
 # Scraper — Agent Guide
 
+> **Superseded — kept for history only.**
+>
+> This was the v0.1 plan. The current rules live in `CLAUDE.md` and the
+> current plan lives in `docs/ROADMAP.md`. Parts of this file now
+> contradict the shipped code (it describes a *visible* browser and
+> says not to add pooling yet — goScraper is headless by default and
+> ships both a browser pool and a page pool). Read `CLAUDE.md` instead;
+> don't follow this file.
+
 ## Why are we building this?
 
 We want a **Go-native browser automation/scraping library** that gives developers a tiny, production-friendly API while hiding browser/CDP complexity.

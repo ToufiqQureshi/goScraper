@@ -1,0 +1,372 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "goScraper Runtime Architecture",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/ToufiqQureshi/goScraper",
+      "provider": "github",
+      "revision": "ac44a36a2989b5260fc71f932d44b5c3719c0775"
+    },
+    "views": [
+      {
+        "id": "request-path",
+        "label": "One scrape request",
+        "focus": [
+          "app",
+          "scraper",
+          "slot",
+          "pagepool",
+          "page",
+          "chromedp",
+          "chrome",
+          "site"
+        ],
+        "note": "Follow a single Get call from your code to the target page."
+      },
+      {
+        "id": "reuse-core",
+        "label": "Reuse and recovery",
+        "focus": [
+          "slot",
+          "pagepool",
+          "corepool",
+          "browserpool",
+          "browserobj"
+        ],
+        "note": "Both pools share one core that recycles stale items and replaces dead ones."
+      },
+      {
+        "id": "trust",
+        "label": "Trust boundaries",
+        "focus": [
+          "browserobj",
+          "chrome",
+          "site"
+        ],
+        "note": "Untrusted pages render inside Chrome's sandbox, in a separate OS process."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "app",
+      "type": "external",
+      "label": "Your Go code",
+      "sublabel": "calls the library",
+      "pos": [
+        60,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "scraper",
+      "type": "frontend",
+      "label": "goscraper.Scraper",
+      "sublabel": "the simple API",
+      "tag": "round-robin",
+      "pos": [
+        332,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "goscraper/scraper.go",
+          "label": "Get and Close"
+        }
+      ]
+    },
+    {
+      "id": "slot",
+      "type": "backend",
+      "label": "slot",
+      "sublabel": "one browser + its tabs",
+      "pos": [
+        604,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "goscraper/slot.go",
+          "label": "rebuilds a dead browser"
+        }
+      ]
+    },
+    {
+      "id": "pagepool",
+      "type": "backend",
+      "label": "pagepool.Pool",
+      "sublabel": "reusable tabs",
+      "pos": [
+        876,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "pagepool/pool.go",
+          "label": "Get, Release, Stats"
+        }
+      ]
+    },
+    {
+      "id": "page",
+      "type": "backend",
+      "label": "browser.Page",
+      "sublabel": "one Chrome tab",
+      "pos": [
+        1148,
+        90
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "browser/page.go",
+          "label": "Navigate, Text, Alive"
+        }
+      ]
+    },
+    {
+      "id": "chromedp",
+      "type": "external",
+      "label": "chromedp",
+      "sublabel": "CDP client",
+      "pos": [
+        1148,
+        510
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "browserobj",
+      "type": "backend",
+      "label": "browser.Browser",
+      "sublabel": "owns one Chrome process",
+      "pos": [
+        332,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "browser/browser.go",
+          "label": "New, Healthy, PID, Close"
+        }
+      ]
+    },
+    {
+      "id": "browserpool",
+      "type": "backend",
+      "label": "browserpool.Pool",
+      "sublabel": "reusable browsers",
+      "pos": [
+        604,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "browserpool/pool.go",
+          "label": "standalone browser pool"
+        }
+      ]
+    },
+    {
+      "id": "corepool",
+      "type": "backend",
+      "label": "internal/pool",
+      "sublabel": "generic reuse core",
+      "tag": "shared",
+      "pos": [
+        876,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/pool/pool.go",
+          "label": "recycle and crash checks"
+        }
+      ]
+    },
+    {
+      "id": "chrome",
+      "type": "security",
+      "label": "Chrome",
+      "sublabel": "headless process",
+      "tag": "sandbox on",
+      "pos": [
+        876,
+        510
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "site",
+      "type": "external",
+      "label": "Target website",
+      "sublabel": "untrusted HTML + JS",
+      "pos": [
+        604,
+        510
+      ],
+      "size": [
+        150,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "goScraper, inside your Go process",
+      "wraps": [
+        "scraper",
+        "slot",
+        "pagepool",
+        "page",
+        "browserobj",
+        "browserpool",
+        "corepool"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "separate OS process",
+      "wraps": [
+        "chrome"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "call",
+      "from": "app",
+      "to": "scraper",
+      "label": "Get(ctx, url)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "pick-slot",
+      "from": "scraper",
+      "to": "slot",
+      "label": "picks a slot",
+      "variant": "emphasis"
+    },
+    {
+      "id": "borrow-tab",
+      "from": "slot",
+      "to": "pagepool",
+      "label": "borrow a tab",
+      "variant": "emphasis"
+    },
+    {
+      "id": "hand-out",
+      "from": "pagepool",
+      "to": "page",
+      "label": "reuses a tab",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cdp",
+      "from": "page",
+      "to": "chromedp",
+      "label": "CDP commands",
+      "variant": "emphasis",
+      "labelDy": 140
+    },
+    {
+      "id": "devtools",
+      "from": "chromedp",
+      "to": "chrome",
+      "label": "DevTools Protocol",
+      "variant": "emphasis"
+    },
+    {
+      "id": "fetch",
+      "from": "chrome",
+      "to": "site",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "tab-reuse",
+      "from": "pagepool",
+      "to": "corepool",
+      "label": "Get / Release",
+      "labelDy": 80
+    },
+    {
+      "id": "browser-reuse",
+      "from": "browserpool",
+      "to": "corepool",
+      "label": "same core"
+    },
+    {
+      "id": "owns-browser",
+      "from": "slot",
+      "to": "browserobj",
+      "label": "rebuilds it if it dies"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One request",
+      "items": [
+        "Get picks a slot round-robin, then reuses a tab that is already open",
+        "The tab goes back to its pool as soon as your callback returns"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Reuse and recovery",
+      "items": [
+        "Both pools share one core: a free Alive check every Get, the round-trip check outside a 2s window",
+        "A crashed tab is replaced; a crashed Chrome is rebuilt with its tab pool and the request retried once"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Limits and trust",
+      "items": [
+        "Browsers x PagesPerBrowser caps concurrency; Get blocks instead of spawning more",
+        "Untrusted pages render in Chrome, a separate process, with its sandbox on by default"
+      ]
+    }
+  ]
+}
