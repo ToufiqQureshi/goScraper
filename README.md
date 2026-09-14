@@ -1,32 +1,58 @@
-<p align="center"><img src="https://i.ibb.co/sdCWkC8P/file-0000000072248207bc2389779c2a0175.png" alt="goScraper Logo" width="180"></p>
+<p align="center"><img src="https://i.ibb.co/sdCWkC8P/file-0000000072248207bc2389779c2a0175.png" alt="goScraper Logo" width="140"></p>
 
-# goScraper
+<h1 align="center">goScraper</h1>
 
-A production-focused browser automation and web scraping library for Go.
+<p align="center">A production-focused browser automation and web scraping library for Go.</p>
 
-> 🚧 Early development — API and internals may change.
+<p align="center">
+  <a href="https://github.com/ToufiqQureshi/goScraper/actions/workflows/go.yml"><img src="https://github.com/ToufiqQureshi/goScraper/actions/workflows/go.yml/badge.svg" alt="Build status"></a>
+  <a href="https://pkg.go.dev/github.com/ToufiqQureshi/Scraper"><img src="https://pkg.go.dev/badge/github.com/ToufiqQureshi/Scraper.svg" alt="Go Reference"></a>
+  <img src="https://img.shields.io/badge/go-1.24%2B-00ADD8?logo=go&logoColor=white" alt="Go 1.24+">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License">
+  <img src="https://img.shields.io/badge/status-early%20development-orange" alt="Early development">
+</p>
 
-## Features
+---
 
-- Headless Chromium by default (works on servers with no display)
-- Every blocking call takes a `context.Context`, so a stuck page
-  can't hang your program
-- Browser pool with crash recovery, idle recycling, and stats
-  (`browserpool`)
-- Page (tab) pool that reuses tabs instead of opening a new one per
-  page, with the same crash recovery (`pagepool`)
-- Simple one-stop API combining both (`goscraper`)
-- Extract text, HTML, and attributes with CSS selectors
-- Click, type, wait for elements, execute JavaScript
-- Designed for long-running crawls, not just one-off scrapes
+goScraper reuses browsers and tabs instead of relaunching Chrome for
+every page, recovers on its own when a tab or the whole browser
+crashes, and bounds every blocking call with `context.Context` — so a
+stuck page can't hang your program. It's built for crawls that run for
+hours or days, not just one-off scripts.
 
-## Installation
+> 🚧 **Early development.** The API and internals may still change.
+> See [docs/ROADMAP.md](docs/ROADMAP.md) for what's built and what's next.
+
+## Contents
+
+- [Why goScraper](#why-goscraper)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Low-level API](#low-level-api)
+- [Architecture](#architecture)
+- [Running in Docker or on Ubuntu 23.10+](#running-in-docker-or-on-ubuntu-2310)
+- [Crash handling](#crash-handling)
+- [Roadmap](#roadmap)
+- [Philosophy](#philosophy)
+- [Responsible use](#responsible-use)
+
+## Why goScraper
+
+| | |
+|---|---|
+| **Reuses, doesn't relaunch** | A pool of browsers and tabs, reused across requests — not a fresh Chrome process per page. |
+| **Recovers on its own** | A crashed tab or a crashed Chrome *process* is detected and replaced automatically, mid-crawl. |
+| **Never hangs** | Every blocking call takes a `context.Context` and is aborted the moment it's done. |
+| **Runs everywhere** | Headless by default, and works inside Docker/containers out of the box. |
+| **One line to start** | `goscraper.New` + `Get` gives you a pooled, self-healing scraper with no setup. |
+
+## Install
 
 ```bash
 go get github.com/ToufiqQureshi/Scraper
 ```
 
-## Quick Start
+## Quick start
 
 The simple API launches a small pool of browsers and tabs for you and
 reuses them automatically:
@@ -65,9 +91,8 @@ func main() {
 }
 ```
 
-Output:
-
 ```text
+$ go run main.go
 Example Domain
 ```
 
@@ -143,10 +168,12 @@ internal generic pool, so it only needs to be correct in one place.
 
 ## Running in Docker or on Ubuntu 23.10+
 
-Chrome's sandbox needs unprivileged user namespaces, which most
-containers and Ubuntu 23.10+ block. Where they're blocked, Chrome exits
-at startup with `No usable sandbox!`.
+<details>
+<summary>Chrome's sandbox needs unprivileged user namespaces, which most containers and Ubuntu 23.10+ block. Click to expand.</summary>
 
+<br>
+
+Where they're blocked, Chrome exits at startup with `No usable sandbox!`.
 Two ways out, best first:
 
 1. **Allow the sandbox.** On a host you control:
@@ -158,13 +185,15 @@ Two ways out, best first:
 2. **Turn the sandbox off**, if you can't change the environment and
    you trust the pages you visit:
 
-```go
-s, err := goscraper.New(ctx, goscraper.Config{
-    Browser: browser.Options{NoSandbox: true},
-})
-```
+   ```go
+   s, err := goscraper.New(ctx, goscraper.Config{
+       Browser: browser.Options{NoSandbox: true},
+   })
+   ```
 
-`browserpool.Options` and `browser.New` take the same option.
+   `browserpool.Options` and `browser.New` take the same option.
+
+</details>
 
 ## Crash handling
 
@@ -191,16 +220,18 @@ missing before goScraper matches its stated goal.
 
 goScraper is being developed incrementally, one feature at a time, and
 every feature is meant to be production-usable the day it ships — see
-`CLAUDE.md` for the full set of development rules this project follows.
+[CLAUDE.md](CLAUDE.md) for the full set of development rules this project follows.
 
-**Simple API → Correctness → Reliability → Performance → Scale**
+<p align="center"><b>Simple API → Correctness → Reliability → Performance → Scale</b></p>
 
-## Responsible Use
+## Responsible use
 
 goScraper is intended for legitimate browser automation, testing, research, and data extraction.
 
 It does not guarantee or promise "undetectable" browsing or bypassing anti-bot or security systems.
 
-## License
+---
 
-MIT
+<p align="center">
+  <sub>MIT License · <a href="https://github.com/ToufiqQureshi/goScraper">github.com/ToufiqQureshi/goScraper</a></sub>
+</p>
